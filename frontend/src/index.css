@@ -1,0 +1,60 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 161 100% 5%;
+  --foreground: 0 0% 98%;
+  --primary: 161 84% 48%;
+  --secondary: 161 100% 15%;
+  --muted: 161 50% 25%;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+body {
+  background: linear-gradient(135deg, hsl(161 100% 5%) 0%, hsl(161 100% 8%) 50%, hsl(0 0% 5%) 100%);
+  color: hsl(0 0% 98%);
+  min-height: 100vh;
+}
+
+@layer utilities {
+  .glass-effect {
+    background: rgba(5, 46, 22, 0.4);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(16, 185, 129, 0.2);
+  }
+
+  .glass-glow {
+    box-shadow: 0 8px 32px rgba(16, 185, 129, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  }
+
+  .neon-glow {
+    box-shadow: 0 0 20px rgba(16, 185, 129, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  }
+
+  .text-gradient {
+    background: linear-gradient(135deg, #10b981 0%, #34d399 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .glow-text {
+    text-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
+  }
+}
+
+#root {
+  min-height: 100vh;
+}

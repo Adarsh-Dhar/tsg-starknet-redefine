@@ -1,0 +1,97 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  
+  .glass-effect {
+    background: rgba(5, 46, 22, 0.4);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+  
+  .glass-glow {
+    box-shadow: 
+      0 8px 32px rgba(16, 185, 129, 0.15),
+      inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  }
+  
+  .neon-glow {
+    box-shadow: 
+      0 0 20px rgba(16, 185, 129, 0.5),
+      inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  }
+}
+
+@layer base {
+  :root {
+    --background: 161 100% 5%;
+    --foreground: 0 0% 98%;
+    --card: 161 100% 8%;
+    --card-foreground: 0 0% 98%;
+    --popover: 161 100% 8%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 161 84% 48%;
+    --primary-foreground: 161 100% 8%;
+    --secondary: 161 100% 15%;
+    --secondary-foreground: 161 84% 48%;
+    --muted: 161 50% 25%;
+    --muted-foreground: 161 30% 60%;
+    --accent: 161 84% 48%;
+    --accent-foreground: 161 100% 8%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 161 50% 20%;
+    --input: 161 100% 12%;
+    --ring: 161 84% 48%;
+    --chart-1: 161 84% 48%;
+    --chart-2: 161 100% 30%;
+    --chart-3: 120 60% 45%;
+    --chart-4: 161 70% 55%;
+    --chart-5: 161 85% 60%;
+    --radius: 0.75rem;
+  }
+  
+  .dark {
+    --background: 161 100% 5%;
+    --foreground: 0 0% 98%;
+    --card: 161 100% 8%;
+    --card-foreground: 0 0% 98%;
+    --popover: 161 100% 8%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 161 84% 48%;
+    --primary-foreground: 161 100% 8%;
+    --secondary: 161 100% 15%;
+    --secondary-foreground: 161 84% 48%;
+    --muted: 161 50% 25%;
+    --muted-foreground: 161 30% 60%;
+    --accent: 161 84% 48%;
+    --accent-foreground: 161 100% 8%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 161 50% 20%;
+    --input: 161 100% 12%;
+    --ring: 161 84% 48%;
+    --chart-1: 161 84% 48%;
+    --chart-2: 161 100% 30%;
+    --chart-3: 120 60% 45%;
+    --chart-4: 161 70% 55%;
+    --chart-5: 161 85% 60%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}

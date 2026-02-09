@@ -32,14 +32,14 @@ export default function App() {
   const breakRequired = screenTime > 0 && screenTime % 30 === 0
 
   return (
-    <div className="min-h-screen w-full bg-gradient-to-br from-slate-950 via-green-950 to-slate-950 flex flex-col">
+    <div className="min-h-screen w-full bg-gradient-to-br from-slate-950 via-green-950 to-slate-950 flex flex-col relative">
       {/* Background decoration */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-0 right-0 w-96 h-96 bg-green-500/5 rounded-full blur-3xl" />
         <div className="absolute bottom-0 left-0 w-96 h-96 bg-emerald-500/5 rounded-full blur-3xl" />
       </div>
 
-      <div className="relative z-10 flex flex-col min-h-screen">
+      <div className="relative z-10 flex flex-col min-h-screen h-full" style={{height: '100%'}}>
         {/* Header */}
         <header className="glass-effect glass-glow px-6 py-4 border-b border-emerald-500/20">
           <div className="max-w-6xl mx-auto flex items-center justify-between">
@@ -59,51 +59,53 @@ export default function App() {
           </div>
         </header>
 
-        {/* Main Content */}
-        <main className="flex-1 overflow-y-auto pb-24">
-          <div className="max-w-6xl mx-auto px-4 md:px-6 py-8 space-y-6">
-            {/* Alert Section */}
-            {isExceeded && (
-              <div className="glass-effect glass-glow p-4 rounded-xl border border-red-500/30 bg-gradient-to-r from-red-500/10 to-red-500/5 flex items-start gap-3">
-                <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
-                <div>
-                  <h3 className="font-semibold text-red-300 mb-1">Daily Goal Exceeded</h3>
-                  <p className="text-sm text-red-200/80">
-                    You've exceeded your daily screen time goal. Time to take a break and touch some grass!
-                  </p>
+        {/* Main Content Scrollable */}
+        <div className="flex-1 overflow-y-auto pb-24" style={{height: 'calc(100% - 64px)'}}>
+          <main>
+            <div className="max-w-6xl mx-auto px-4 md:px-6 py-8 space-y-6">
+              {/* Alert Section */}
+              {isExceeded && (
+                <div className="glass-effect glass-glow p-4 rounded-xl border border-red-500/30 bg-gradient-to-r from-red-500/10 to-red-500/5 flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <h3 className="font-semibold text-red-300 mb-1">Daily Goal Exceeded</h3>
+                    <p className="text-sm text-red-200/80">
+                      You've exceeded your daily screen time goal. Time to take a break and touch some grass!
+                    </p>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {breakRequired && screenTime > 0 && (
-              <GrassReminder screenTime={screenTime} />
-            )}
+              {breakRequired && screenTime > 0 && (
+                <GrassReminder screenTime={screenTime} />
+              )}
 
-            {/* Content Views */}
-            {currentView === 'dashboard' && (
-              <Dashboard
-                screenTime={screenTime}
-                dailyGoal={dailyGoal}
-                percentage={screenTimePercentage}
-              />
-            )}
+              {/* Content Views */}
+              {currentView === 'dashboard' && (
+                <Dashboard
+                  screenTime={screenTime}
+                  dailyGoal={dailyGoal}
+                  percentage={screenTimePercentage}
+                />
+              )}
 
-            {currentView === 'stats' && (
-              <div className="space-y-6">
-                <DailyStats screenTime={screenTime} dailyGoal={dailyGoal} />
-                <WeeklyChart />
-              </div>
-            )}
+              {currentView === 'stats' && (
+                <div className="space-y-6">
+                  <DailyStats screenTime={screenTime} dailyGoal={dailyGoal} />
+                  <WeeklyChart />
+                </div>
+              )}
 
-            {currentView === 'settings' && (
-              <Settings dailyGoal={dailyGoal} onGoalChange={setDailyGoal} />
-            )}
-          </div>
-        </main>
+              {currentView === 'settings' && (
+                <Settings dailyGoal={dailyGoal} onGoalChange={setDailyGoal} />
+              )}
+            </div>
+          </main>
+        </div>
       </div>
 
       {/* Mobile Bottom Navigation */}
-      <nav className="glass-effect glass-glow border-t border-emerald-500/20 fixed bottom-0 left-0 right-0 max-w-6xl mx-auto w-full">
+      <nav className="glass-effect glass-glow border-t border-emerald-500/20 fixed bottom-0 left-0 right-0 max-w-6xl mx-auto w-full z-20">
         <div className="flex items-center justify-around md:justify-center md:gap-8">
           {[
             { id: 'dashboard' as const, icon: Home, label: 'Home' },

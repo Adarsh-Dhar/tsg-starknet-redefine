@@ -1,7 +1,57 @@
-import { useState } from 'react';
+
+import { useState, useEffect } from 'react';
 import { ElectrumNetworkProvider, Contract } from 'cashscript';
 // Make sure this path points to where you placed Delegation.json
-import artifact from './Delegation.json'; 
+import artifact from './Delegation.json';
+
+// --- Extension Wallet Connection Bridge ---
+export function WalletConnection() {
+  const [pubKey, setPubKey] = useState<string | null>(null);
+
+  // Listen for the message coming FROM localhost:3000
+  useEffect(() => {
+    const messageListener = (message: any, sender: any, sendResponse: any) => {
+      if (message.type === 'WALLET_CONNECTED' && message.pubKey) {
+        console.log("Received PubKey from Web App:", message.pubKey);
+        setPubKey(message.pubKey);
+        sendResponse({ status: "Success" });
+      }
+    };
+    if (chrome && chrome.runtime && chrome.runtime.onMessageExternal) {
+      chrome.runtime.onMessageExternal.addListener(messageListener);
+    }
+    return () => {
+      if (chrome && chrome.runtime && chrome.runtime.onMessageExternal) {
+        chrome.runtime.onMessageExternal.removeListener(messageListener);
+      }
+    };
+  }, []);
+
+  // Open the Web App
+  const openWalletPage = () => {
+    const extensionId = chrome.runtime.id;
+    window.open(`http://localhost:3000/wallet?extId=${extensionId}`, '_blank');
+  };
+
+  return (
+    <div className="p-4 border rounded-lg mt-4">
+      <h3 className="font-bold mb-2">Connect BCH Wallet</h3>
+      {pubKey ? (
+        <div className="p-3 bg-green-50 text-green-800 rounded border border-green-200">
+          <p className="text-xs text-gray-500">Connected Public Key:</p>
+          <p className="font-mono text-sm break-all">{pubKey}</p>
+        </div>
+      ) : (
+        <button 
+          onClick={openWalletPage}
+          className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+        >
+          Connect Wallet via Web
+        </button>
+      )}
+    </div>
+  );
+}
 
 export function DelegationSetup() {
   const [vaultAddress, setVaultAddress] = useState<string>('');

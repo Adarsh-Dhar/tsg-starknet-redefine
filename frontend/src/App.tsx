@@ -2,7 +2,6 @@
 import { useState } from 'react';
 import { BarChart3, Settings as SettingsIcon, Home, Zap } from 'lucide-react';
 import Dashboard from './components/Dashboard';
-import Settings from './components/Settings';
 import WeeklyChart from './components/WeeklyChart';
 // 1. IMPORT YOUR NEW COMPONENTS HERE
 import { WalletConnection, DelegationSetup } from './Settings';

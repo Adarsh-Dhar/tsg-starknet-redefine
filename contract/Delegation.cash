@@ -1,0 +1,21 @@
+pragma cashscript ^0.12.1;
+
+// The contract is initialized with the User's PubKey and the Server's (Delegate) PubKey
+contract Delegation(pubkey ownerPk, pubkey delegatePk) {
+
+    // Path 1: The server triggers a penalty
+    function executePenalty(sig delegateSig) {
+        // Verifies the transaction is signed by the server's private key
+        require(checkSig(delegateSig, delegatePk));
+        
+        // Note: For a production environment, you would add Native Introspection here
+        // e.g., requiring that the output amount is strictly limited to the penalty fee,
+        // rather than allowing the delegate to drain the entire UTXO.
+    }
+
+    // Path 2: The user un-delegates and takes their funds back
+    function reclaim(sig ownerSig) {
+        // Verifies the transaction is signed by the user's private key
+        require(checkSig(ownerSig, ownerPk));
+    }
+}

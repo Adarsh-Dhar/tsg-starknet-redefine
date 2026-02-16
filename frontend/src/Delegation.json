@@ -1,0 +1,55 @@
+{
+  "contractName": "Delegation",
+  "constructorInputs": [
+    {
+      "name": "ownerPk",
+      "type": "pubkey"
+    },
+    {
+      "name": "delegatePk",
+      "type": "pubkey"
+    }
+  ],
+  "abi": [
+    {
+      "name": "executePenalty",
+      "inputs": [
+        {
+          "name": "delegateSig",
+          "type": "sig"
+        }
+      ]
+    },
+    {
+      "name": "reclaim",
+      "inputs": [
+        {
+          "name": "ownerSig",
+          "type": "sig"
+        }
+      ]
+    }
+  ],
+  "bytecode": "OP_2 OP_PICK OP_0 OP_NUMEQUAL OP_IF OP_3 OP_ROLL OP_ROT OP_CHECKSIG OP_NIP OP_NIP OP_ELSE OP_ROT OP_1 OP_NUMEQUALVERIFY OP_ROT OP_SWAP OP_CHECKSIG OP_NIP OP_ENDIF",
+  "source": "pragma cashscript ^0.12.1;\n\n// The contract is initialized with the User's PubKey and the Server's (Delegate) PubKey\ncontract Delegation(pubkey ownerPk, pubkey delegatePk) {\n\n    // Path 1: The server triggers a penalty\n    function executePenalty(sig delegateSig) {\n        // Verifies the transaction is signed by the server's private key\n        require(checkSig(delegateSig, delegatePk));\n        \n        // Note: For a production environment, you would add Native Introspection here\n        // e.g., requiring that the output amount is strictly limited to the penalty fee,\n        // rather than allowing the delegate to drain the entire UTXO.\n    }\n\n    // Path 2: The user un-delegates and takes their funds back\n    function reclaim(sig ownerSig) {\n        // Verifies the transaction is signed by the user's private key\n        require(checkSig(ownerSig, ownerPk));\n    }\n}",
+  "debug": {
+    "bytecode": "5279009c63537a7bac7777677b519d7b7cac7768",
+    "sourceMap": "7:4:14:5;;;;;9:25:9:36;;:38::48;:8::51:1;7:4:14:5;;;17::20::0;;;19:25:19:33;:35::42;:8::45:1;17:4:20:5;4:0:21:1",
+    "logs": [],
+    "requires": [
+      {
+        "ip": 11,
+        "line": 9
+      },
+      {
+        "ip": 20,
+        "line": 19
+      }
+    ]
+  },
+  "compiler": {
+    "name": "cashc",
+    "version": "0.12.1"
+  },
+  "updatedAt": "2026-02-16T13:05:01.067Z"
+}

@@ -5,24 +5,28 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.serverPubKeyHex = exports.backendPrivateKey = void 0;
 exports.initBackendWallet = initBackendWallet;
-const bitcore_mnemonic_1 = __importDefault(require("bitcore-mnemonic"));
+const path_1 = __importDefault(require("path"));
 const dotenv_1 = __importDefault(require("dotenv"));
-dotenv_1.default.config();
+const bitcore_mnemonic_1 = __importDefault(require("bitcore-mnemonic"));
+dotenv_1.default.config({ path: path_1.default.resolve(__dirname, '../../.env') });
 function initBackendWallet() {
     const mnemonicString = process.env.BCH_BACKEND_MNEMONIC;
     if (!mnemonicString)
         throw new Error("Missing BCH_BACKEND_MNEMONIC in .env");
-    // 1. Create Mnemonic object
-    const code = new bitcore_mnemonic_1.default(mnemonicString);
-    // 2. Derive the HDPrivateKey (Standard path m/44'/145'/0'/0/0 for BCH)
-    const hdPrivateKey = code.toHDPrivateKey("", 'testnet');
-    const derived = hdPrivateKey.deriveChild("m/44'/145'/0'/0/0");
-    // 3. Set global variables for use in routes
-    exports.backendPrivateKey = derived.privateKey;
-    exports.serverPubKeyHex = exports.backendPrivateKey.toPublicKey().toString();
-    // Optionally, set SERVER_PUBKEY in process.env for legacy code
-    process.env.SERVER_PUBKEY = exports.serverPubKeyHex;
-    console.log("✅ Backend Wallet Initialized");
-    console.log("Public Key (Hex):", exports.serverPubKeyHex);
-    console.log("BCH Address:", exports.backendPrivateKey.toAddress('testnet').toString());
+    try {
+        const code = new bitcore_mnemonic_1.default(mnemonicString);
+        // Derive the HDPrivateKey using 'testnet' for Chipnet compatibility
+        const hdPrivateKey = code.toHDPrivateKey("", 'testnet');
+        const derived = hdPrivateKey.deriveChild("m/44'/145'/0'/0/0");
+        // Initialize the variables
+        exports.backendPrivateKey = derived.privateKey;
+        exports.serverPubKeyHex = exports.backendPrivateKey.toPublicKey().toString();
+        console.log("✅ Backend Wallet Initialized");
+        console.log("Public Key (Hex):", exports.serverPubKeyHex);
+        console.log("BCH Address:", exports.backendPrivateKey.toAddress().toString());
+    }
+    catch (error) {
+        console.error("❌ Failed to initialize wallet:", error.message);
+        throw error;
+    }
 }

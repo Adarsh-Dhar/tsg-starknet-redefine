@@ -15,7 +15,8 @@ const USDC_ABI = [
     "function balanceOf(address owner) public view returns (uint256)"
 ];
 // Provider and Wallet setup
-const provider = new ethers_1.ethers.JsonRpcProvider(process.env.BSC_RPC_URL);
+// Use BSC Testnet RPC directly for clarity and reliability
+const provider = new ethers_1.ethers.JsonRpcProvider("https://bsc-testnet-dataseed.bnbchain.org");
 console.log('Loaded BACKEND_PRIVATE_KEY:', JSON.stringify(process.env.BACKEND_PRIVATE_KEY), 'Length:', process.env.BACKEND_PRIVATE_KEY?.length);
 const backendWallet = new ethers_1.ethers.Wallet(process.env.BACKEND_PRIVATE_KEY, provider);
 const usdcContract = new ethers_1.ethers.Contract(process.env.USDC_ADDRESS, USDC_ABI, backendWallet);
@@ -25,6 +26,14 @@ function calculateExponentialScore(_mindsetMetadata) { return 0; }
 // AI-Slash Pipeline
 router.post('/ai-slash', async (req, res) => {
     const { userPublicKey, sessionTraceId, telemetryData, sessionDuration } = req.body;
+    // Validate required fields
+    if (!userPublicKey || !sessionTraceId || !telemetryData || !sessionDuration) {
+        return res.status(400).json({ error: 'Missing required fields in request body.' });
+    }
+    // Validate BSC address
+    if (!ethers_1.ethers.isAddress(userPublicKey)) {
+        return res.status(400).json({ success: false, error: "Invalid BSC Address provided. Must be a 0x... hex string." });
+    }
     try {
         // [AI Analysis Logic remains the same - as per previous turn]
         const exceedsThreshold = true; // Placeholder for intervention logic
@@ -55,6 +64,21 @@ router.post('/ai-slash', async (req, res) => {
 // Manual Slash
 router.post('/slash', async (req, res) => {
     const { userPublicKey, amount, metrics, mindsetMetadata } = req.body;
+    // Validate required fields
+    if (!userPublicKey || !amount) {
+        return res.status(400).json({ error: 'Missing userPublicKey or amount in request body.' });
+    }
+    // Validate BSC address
+    if (!userPublicKey || !ethers_1.ethers.isAddress(userPublicKey)) {
+        return res.status(400).json({
+            success: false,
+            error: "Invalid BSC Address provided. It must be a valid 0x... hex string."
+        });
+    }
+    // Use explicit BSC Testnet provider for all contract interactions
+    const provider = new ethers_1.ethers.JsonRpcProvider("https://bsc-testnet-dataseed.bnbchain.org");
+    const backendWallet = new ethers_1.ethers.Wallet(process.env.BACKEND_PRIVATE_KEY, provider);
+    const usdcContract = new ethers_1.ethers.Contract(process.env.USDC_ADDRESS, USDC_ABI, backendWallet);
     const dissociationIndex = calculateDissociationIndex(mindsetMetadata);
     const exponentialScore = calculateExponentialScore(mindsetMetadata);
     try {
@@ -98,5 +122,4 @@ router.post('/refund', async (req, res) => {
         res.status(500).json({ success: false, error: e.message });
     }
 });
-module.exports = router;
-module.exports = router;
+exports.default = router;

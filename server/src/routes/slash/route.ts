@@ -68,13 +68,13 @@ router.post('/slash', async (req: Request, res: Response) => {
   if (!userPublicKey || !amount) {
     return res.status(400).json({ error: 'Missing userPublicKey or amount in request body.' });
   }
-  // Validate BSC address
-  if (!ethers.isAddress(userPublicKey)) {
-    return res.status(400).json({ 
-      success: false, 
-      error: "Invalid BSC Address. Please provide a valid 0x... address." 
-    });
-  }
+    // Validate BSC address
+    if (!userPublicKey || !ethers.isAddress(userPublicKey)) {
+      return res.status(400).json({ 
+        success: false, 
+        error: "Invalid BSC Address provided. It must be a valid 0x... hex string." 
+      });
+    }
   // Use explicit BSC Testnet provider for all contract interactions
   const provider = new ethers.JsonRpcProvider("https://bsc-testnet-dataseed.bnbchain.org");
   const backendWallet = new ethers.Wallet(process.env.BACKEND_PRIVATE_KEY!, provider);

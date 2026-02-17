@@ -1,13 +1,15 @@
 
 
 import { Router } from 'express';
-import artifact from '../../../contract/Delegation.json';
-import { serverPubKeyHex } from '../backendWallet';
+import artifact from '../../../../contract/Delegation.json';
+import { serverPubKeyHex, backendPrivateKey } from '../../backendWallet';
 
 const router = Router();
 
 router.post('/create-vault', async (req, res) => {
+  console.log("1")
   try {
+    console.log('Received vault creation request with body:', req.body);
     if (!req.is('application/json')) {
       return res.status(400).json({ error: 'Invalid content-type, expected application/json' });
     }

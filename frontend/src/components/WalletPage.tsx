@@ -33,6 +33,7 @@ export default function WalletPage() {
   // Fetch vault address from backend
   const fetchVaultAddress = async (pubKey: string) => {
     try {
+      // Ensure endpoint matches backend: /api/vault/create-vault
       const res = await fetch('http://localhost:3333/api/vault/create-vault', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

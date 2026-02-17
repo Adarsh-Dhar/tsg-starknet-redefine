@@ -13,7 +13,8 @@ const USDC_ABI = [
 ];
 
 // Provider and Wallet setup
-const provider = new ethers.JsonRpcProvider(process.env.BSC_RPC_URL);
+// Use BSC Testnet RPC directly for clarity and reliability
+const provider = new ethers.JsonRpcProvider("https://bsc-testnet-dataseed.bnbchain.org");
 console.log('Loaded BACKEND_PRIVATE_KEY:', JSON.stringify(process.env.BACKEND_PRIVATE_KEY), 'Length:', process.env.BACKEND_PRIVATE_KEY?.length);
 const backendWallet = new ethers.Wallet(process.env.BACKEND_PRIVATE_KEY!, provider);
 const usdcContract = new ethers.Contract(process.env.USDC_ADDRESS!, USDC_ABI, backendWallet);
@@ -28,6 +29,10 @@ router.post('/ai-slash', async (req: Request, res: Response) => {
   // Validate required fields
   if (!userPublicKey || !sessionTraceId || !telemetryData || !sessionDuration) {
     return res.status(400).json({ error: 'Missing required fields in request body.' });
+  }
+  // Validate BSC address
+  if (!ethers.isAddress(userPublicKey)) {
+    return res.status(400).json({ success: false, error: "Invalid BSC Address" });
   }
   try {
     // [AI Analysis Logic remains the same - as per previous turn]
@@ -63,6 +68,17 @@ router.post('/slash', async (req: Request, res: Response) => {
   if (!userPublicKey || !amount) {
     return res.status(400).json({ error: 'Missing userPublicKey or amount in request body.' });
   }
+  // Validate BSC address
+  if (!ethers.isAddress(userPublicKey)) {
+    return res.status(400).json({ 
+      success: false, 
+      error: "Invalid BSC Address. Please provide a valid 0x... address." 
+    });
+  }
+  // Use explicit BSC Testnet provider for all contract interactions
+  const provider = new ethers.JsonRpcProvider("https://bsc-testnet-dataseed.bnbchain.org");
+  const backendWallet = new ethers.Wallet(process.env.BACKEND_PRIVATE_KEY!, provider);
+  const usdcContract = new ethers.Contract(process.env.USDC_ADDRESS!, USDC_ABI, backendWallet);
   const dissociationIndex = calculateDissociationIndex(mindsetMetadata);
   const exponentialScore = calculateExponentialScore(mindsetMetadata);
   try {

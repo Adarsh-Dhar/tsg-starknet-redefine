@@ -1,3 +1,4 @@
+
 const { Router } = require('express');
 const artifact = require('../../../contract/Delegation.json');
 const { serverPubKeyHex } = require('../backendWallet');

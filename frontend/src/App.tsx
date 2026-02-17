@@ -2,10 +2,9 @@
 import { useState } from 'react';
 import { BarChart3, Settings as SettingsIcon, Home, Zap } from 'lucide-react';
 import Dashboard from './components/Dashboard';
+import { Settings } from './components/Settings';
 import WeeklyChart from './components/WeeklyChart';
 // 1. IMPORT YOUR NEW COMPONENTS HERE
-import { WalletConnection, DelegationSetup } from './Settings';
-
 function App() {
   const [activeTab, setActiveTab] = useState<'home' | 'insights' | 'leaderboard'>('home');
   // Add state for Dashboard props
@@ -37,8 +36,7 @@ function App() {
           <div className="pb-6">
             {/* 2. RENDER THE WALLET AND DELEGATION SETUP HERE */}
             <div className="px-4 pt-4">
-              <WalletConnection />
-              <DelegationSetup />
+              <Settings />
             </div>
             <Dashboard screenTime={screenTime} dailyGoal={dailyGoal} percentage={percentage} />
           </div>

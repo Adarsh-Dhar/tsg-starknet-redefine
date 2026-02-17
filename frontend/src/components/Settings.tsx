@@ -11,8 +11,12 @@ export function Settings() {
   // Load wallet on mount if they already generated one
   useEffect(() => {
     chrome.storage.local.get(['bchPubKey', 'bchAddress', 'bchVaultAddress'], (res) => {
-      if (res.bchPubKey) setWallet({ pubKey: res.bchPubKey, address: res.bchAddress });
-      if (res.bchVaultAddress) setVaultAddress(res.bchVaultAddress);
+      if (typeof res.bchPubKey === 'string' && typeof res.bchAddress === 'string') {
+        setWallet({ pubKey: res.bchPubKey, address: res.bchAddress });
+      }
+      if (typeof res.bchVaultAddress === 'string') {
+        setVaultAddress(res.bchVaultAddress);
+      }
     });
   }, []);
 
@@ -36,17 +40,14 @@ export function Settings() {
       setWallet({ pubKey, address });
 
       // 4. Ask Backend to Generate the CashScript Vault
-      // TODO: Replace with your actual backend endpoint
-      /*
-      const response = await fetch('http://localhost:8080/api/create-vault', {
+      const response = await fetch('http://localhost:3333/api/create-vault', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userPubKeyHex: pubKey })
       });
       const data = await response.json();
       setVaultAddress(data.vaultAddress);
-      chrome.storage.local.set({ bchVaultAddress: data.vaultAddress });
-      */
+      await chrome.storage.local.set({ bchVaultAddress: data.vaultAddress });
 
     } catch (err) {
       console.error("Failed to generate wallet:", err);

@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      cashscript:
+        specifier: ^0.12.1
+        version: 0.12.1
       ethers:
         specifier: ^6.16.0
         version: 6.16.0
@@ -32,6 +35,22 @@ packages:
 
   '@adraffy/ens-normalize@1.10.1':
     resolution: {integrity: sha512-96Z2IP3mYmF1Xg2cDm8f1gWGf/HUVedQ3FMifV4kG/PQ4yEP51xDtRAEfhVNt5f/uzpNkZHwWQuUcu6D6K+Ekw==}
+
+  '@bitauth/libauth@3.1.0-next.8':
+    resolution: {integrity: sha512-Pm+Ju+YP3JeBLLTiVrBnia2wwE4G17r4XqpvPRMcklElJTe8J6x3JgKRg1by0Xm3ZY6UFxACkEAoSA+x419/zA==}
+    engines: {node: ^12.20.0 || ^14.13.1 || >=16.0.0}
+
+  '@cashscript/utils@0.12.1':
+    resolution: {integrity: sha512-dGVbbFMUHZJFjmLkGQNrM0/hzoXlJgM8bYU1J5cX80Vo5n7dmopctmxplgXGd3u/h6hBUt3V7lTawGi8DBupJQ==}
+
+  '@electrum-cash/debug-logs@1.0.0':
+    resolution: {integrity: sha512-GU/CvRR9lZ0d8gy9CXGW7f//OHCIydBavv9q+JcxjGj8Xr7HwlGqHx+Wzhx9y3YmJrXfExpgClcd++gTjdEmzA==}
+
+  '@electrum-cash/network@4.2.2':
+    resolution: {integrity: sha512-v2Wwt2o0VBBALPArx2dJEDvSqewKjiTW5KAd+jEXxxgdSxFygjJIrFcXryKOCv2CDbpE5+lXAogPAjx6FqW/nw==}
+
+  '@electrum-cash/web-socket@1.2.3':
+    resolution: {integrity: sha512-sFWujTt98mvsMvE6gWjG44evkF3PcZhG1JffkkEUAVan+c9X51wkiWr3hkjPeIW0WfNpMTrFkvpGqVYmRj1RCA==}
 
   '@esbuild/aix-ppc64@0.27.3':
     resolution: {integrity: sha512-9fJMTNFTWZMh5qwrBItuziu834eOCUcEqymSH7pY+zoMVEZg3gcPuBNxH1EvfVYe9h0x/Ptw8KBzv7qxb7l8dg==}
@@ -189,6 +208,14 @@ packages:
     cpu: [x64]
     os: [win32]
 
+  '@monsterbitar/isomorphic-ws@5.3.1':
+    resolution: {integrity: sha512-BWfWUffbg3uO4K6Cyokg9ff43lPaXAOZcCnNe1lcjCjUMDVrRAb5qEHG5qeJp3ud2SPYbORaNsls5as6SR3oig==}
+    peerDependencies:
+      ws: '*'
+
+  '@mr-zwets/bchn-api-wrapper@1.0.2':
+    resolution: {integrity: sha512-hgtnepLQcR+ea2Qz2Kiua0LrtCO3Vx6JcgZMThml2KAut8/Y7w6Qb6g5tOjpE2ysFZfC3MGqYnFmxiBLfToxwA==}
+
   '@noble/curves@1.2.0':
     resolution: {integrity: sha512-oYclrNgRaM9SsBUBVbb8M6DTV7ZHRTKugureoYEncY5c65HOmRzvSiTE3y5CYaPYJA/GVkrhXEoF0M3Ya9PMnw==}
 
@@ -229,12 +256,18 @@ packages:
   '@types/serve-static@2.2.0':
     resolution: {integrity: sha512-8mam4H1NHLtu7nmtalF7eyBH14QyOASmcxHhSfEoRyr0nP/YdoesEtU+uSRvMe96TW/HPTtkoKqQLl53N7UXMQ==}
 
+  '@types/ws@8.18.1':
+    resolution: {integrity: sha512-ThVF6DCVhA8kUGy+aazFQ4kXQ7E1Ty7A3ypFOe0IcJV8O/M511G99AW24irKrW56Wt44yG9+ij8FaqoBGkuBXg==}
+
   accepts@2.0.0:
     resolution: {integrity: sha512-5cvg6CtKwfgdmVqY1WIiXKc3Q1bkRqGLi+2W/6ao+6Y7gu/RCwRuAhGEzh5B4KlszSuTLgZYuqFqo5bImjNKng==}
     engines: {node: '>= 0.6'}
 
   aes-js@4.0.0-beta.5:
     resolution: {integrity: sha512-G965FqalsNyrPqgEGON7nIx1e/OVENSgiEIzyC63haUMuvNnwIgIjMs52hlTCKhkBny7A2ORNlfY9Zu+jmGk1Q==}
+
+  async-mutex@0.5.0:
+    resolution: {integrity: sha512-1A94B18jkJ3DYq284ohPxoXbfTA5HsQ7/Mf4DEhcyLx3Bz27Rh59iScbB6EPiP+B+joue6YCxcMXSbFC1tZKwA==}
 
   body-parser@2.2.2:
     resolution: {integrity: sha512-oP5VkATKlNwcgvxi0vM0p/D3n2C3EReYVX+DNYs5TjZFn/oQt2j+4sVJtSMr18pdRr8wjTcBl6LoV+FUwzPmNA==}
@@ -251,6 +284,9 @@ packages:
   call-bound@1.0.4:
     resolution: {integrity: sha512-+ys997U96po4Kx/ABpBCqhA9EuxJaQWDQg7295H4hBphv3IZg0boBKuwYpt4YXp6MZ5AmZQnU/tyMTlRpaSejg==}
     engines: {node: '>= 0.4'}
+
+  cashscript@0.12.1:
+    resolution: {integrity: sha512-IGKipstPw+/N+Nr5YyZf7LH89o32cmoMZFYZsEYQdOhMJQKp/m8lxkug8bPTm3oee+zzO4vYpDCbsBCaAhuj/A==}
 
   content-disposition@1.0.1:
     resolution: {integrity: sha512-oIXISMynqSqm241k6kcQ5UwttDILMK4BiurCfGEREw6+X9jkkpEe5T9FZaApyLGGOnFuyMWZpdolTXMtvEJ08Q==}
@@ -320,6 +356,9 @@ packages:
     resolution: {integrity: sha512-U1wulmetNymijEhpSEQ7Ct/P/Jw9/e7R1j5XIbPRydgV2DjLVMsULDlNksq3RQnFgKoLlZf88ijYtWEXcPa07A==}
     engines: {node: '>=14.0.0'}
 
+  eventemitter3@5.0.4:
+    resolution: {integrity: sha512-mlsTRyGaPBjPedk6Bvw+aqbsXDtoAyAzm5MO7JgU+yVRyMQ5O8bD4Kcci7BS85f93veegeCPkL8R4GLClnjLFw==}
+
   express@5.2.1:
     resolution: {integrity: sha512-hIS4idWWai69NezIdRt2xFVofaF4j+6INOpJlVOLDO8zXGpUVEVzIYk12UUi2JzjEzWL3IOAxcTubgz9Po0yXw==}
     engines: {node: '>= 18'}
@@ -385,6 +424,9 @@ packages:
   is-promise@4.0.0:
     resolution: {integrity: sha512-hvpoI6korhJMnej285dSg6nu1+e6uxs7zG3BYAm5byqDsgJNWwxzM6z6iZiAgQR4TJ30JmBTOwqZUw3WlyH3AQ==}
 
+  lossless-json@4.3.0:
+    resolution: {integrity: sha512-ToxOC+SsduRmdSuoLZLYAr5zy1Qu7l5XhmPWM3zefCZ5IcrzW/h108qbJUKfOlDlhvhjUK84+8PSVX0kxnit0g==}
+
   math-intrinsics@1.1.0:
     resolution: {integrity: sha512-/IXtbwEk5HTPyEwyKX6hGkYXxM9nbj64B+ilVJnC/R6B0pH5G4V3b0pVbL7DBj4tkhBAppbQUlf6F6Xl9LHu1g==}
     engines: {node: '>= 0.4'}
@@ -423,6 +465,9 @@ packages:
   once@1.4.0:
     resolution: {integrity: sha512-lNaJgI+2Q5URQBkccEKHTQOPaXdUxnZZElQTZY0MFUAuaEqe1E+Nyvgdz/aIyNi6Z9MzO5dv1H8n58/GELp3+w==}
 
+  pako@2.1.0:
+    resolution: {integrity: sha512-w+eufiZ1WuJYgPXbV/PO3NCMEc3xqylkKHzp8bxp1uW4qaSNQUkwmLLEc3kKsfz8lpV1F8Ht3U1Cm+9Srog2ug==}
+
   parseurl@1.3.3:
     resolution: {integrity: sha512-CiyeOxFT/JZyN5m0z9PfXw4SCBJ6Sygz1Dpl0wqjlhDEGGBP1GnsUVEL0p63hoG1fcj3fHynXi9NYO4nWOL+qQ==}
     engines: {node: '>= 0.8'}
@@ -455,6 +500,11 @@ packages:
 
   safer-buffer@2.1.2:
     resolution: {integrity: sha512-YZo3K82SD7Riyi0E1EQPojLz7kpepnSQI9IyPbHHg1XXXevb5dJI7tpyN2ADxGcQbHG7vcyRHk0cbwqcQriUtg==}
+
+  semver@7.7.4:
+    resolution: {integrity: sha512-vFKC2IEtQnVhpT78h1Yp8wzwrf8CM+MzKMHGJZfBtzhZNycRFnXsHk6E5TxIkkMsgNS7mdX3AGB7x2QM2di4lA==}
+    engines: {node: '>=10'}
+    hasBin: true
 
   send@1.2.1:
     resolution: {integrity: sha512-1gnZf7DFcoIcajTjTwjwuDjzuz4PPcY2StKPlsGAQ1+YH20IRVrBaXSWmdjowTJ6u8Rc01PoYOGHXfP1mYcZNQ==}
@@ -541,6 +591,45 @@ snapshots:
 
   '@adraffy/ens-normalize@1.10.1': {}
 
+  '@bitauth/libauth@3.1.0-next.8': {}
+
+  '@cashscript/utils@0.12.1':
+    dependencies:
+      '@bitauth/libauth': 3.1.0-next.8
+
+  '@electrum-cash/debug-logs@1.0.0':
+    dependencies:
+      debug: 4.4.3
+    transitivePeerDependencies:
+      - supports-color
+
+  '@electrum-cash/network@4.2.2':
+    dependencies:
+      '@electrum-cash/debug-logs': 1.0.0
+      '@electrum-cash/web-socket': 1.2.3
+      async-mutex: 0.5.0
+      debug: 4.4.3
+      eventemitter3: 5.0.4
+      lossless-json: 4.3.0
+    transitivePeerDependencies:
+      - bufferutil
+      - supports-color
+      - utf-8-validate
+
+  '@electrum-cash/web-socket@1.2.3':
+    dependencies:
+      '@electrum-cash/debug-logs': 1.0.0
+      '@monsterbitar/isomorphic-ws': 5.3.1(ws@8.17.1)
+      '@types/ws': 8.18.1
+      async-mutex: 0.5.0
+      eventemitter3: 5.0.4
+      lossless-json: 4.3.0
+      ws: 8.17.1
+    transitivePeerDependencies:
+      - bufferutil
+      - supports-color
+      - utf-8-validate
+
   '@esbuild/aix-ppc64@0.27.3':
     optional: true
 
@@ -619,6 +708,12 @@ snapshots:
   '@esbuild/win32-x64@0.27.3':
     optional: true
 
+  '@monsterbitar/isomorphic-ws@5.3.1(ws@8.17.1)':
+    dependencies:
+      ws: 8.17.1
+
+  '@mr-zwets/bchn-api-wrapper@1.0.2': {}
+
   '@noble/curves@1.2.0':
     dependencies:
       '@noble/hashes': 1.3.2
@@ -670,12 +765,20 @@ snapshots:
       '@types/http-errors': 2.0.5
       '@types/node': 25.2.2
 
+  '@types/ws@8.18.1':
+    dependencies:
+      '@types/node': 25.2.2
+
   accepts@2.0.0:
     dependencies:
       mime-types: 3.0.2
       negotiator: 1.0.0
 
   aes-js@4.0.0-beta.5: {}
+
+  async-mutex@0.5.0:
+    dependencies:
+      tslib: 2.7.0
 
   body-parser@2.2.2:
     dependencies:
@@ -702,6 +805,19 @@ snapshots:
     dependencies:
       call-bind-apply-helpers: 1.0.2
       get-intrinsic: 1.3.0
+
+  cashscript@0.12.1:
+    dependencies:
+      '@bitauth/libauth': 3.1.0-next.8
+      '@cashscript/utils': 0.12.1
+      '@electrum-cash/network': 4.2.2
+      '@mr-zwets/bchn-api-wrapper': 1.0.2
+      pako: 2.1.0
+      semver: 7.7.4
+    transitivePeerDependencies:
+      - bufferutil
+      - supports-color
+      - utf-8-validate
 
   content-disposition@1.0.1: {}
 
@@ -780,6 +896,8 @@ snapshots:
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
+
+  eventemitter3@5.0.4: {}
 
   express@5.2.1:
     dependencies:
@@ -882,6 +1000,8 @@ snapshots:
 
   is-promise@4.0.0: {}
 
+  lossless-json@4.3.0: {}
+
   math-intrinsics@1.1.0: {}
 
   media-typer@1.1.0: {}
@@ -907,6 +1027,8 @@ snapshots:
   once@1.4.0:
     dependencies:
       wrappy: 1.0.2
+
+  pako@2.1.0: {}
 
   parseurl@1.3.3: {}
 
@@ -943,6 +1065,8 @@ snapshots:
       - supports-color
 
   safer-buffer@2.1.2: {}
+
+  semver@7.7.4: {}
 
   send@1.2.1:
     dependencies:

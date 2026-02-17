@@ -1,5 +1,6 @@
 import express, { Request, Response } from 'express';
 import slashRouter from './routes/slash/route';
+import vaultRouter from './routes/vault';
 
 const app = express();
 const PORT = 3333;
@@ -14,6 +15,7 @@ app.get('/', (req: Request, res: Response) => {
 
 // Mount the slash router
 app.use('/api', slashRouter);
+app.use('/api', vaultRouter);
 
 app.listen(PORT, () => {
   console.log(`Server is live at http://localhost:${PORT}`);

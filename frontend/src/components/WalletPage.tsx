@@ -66,29 +66,28 @@ export default function WalletPage() {
     if (!wallet || !vaultAddress) return alert('Wallet or vault not initialized!');
     setLoading(true);
     try {
-      // 1. Use a stable provider (Loping is verified in your bash diagnostic)
+      // 1. Initialize the provider for Chipnet
       const provider = new ElectrumNetworkProvider('chipnet');
 
-      // 2. Initialize the Contract
+      // 2. Initialize the Contract instance
       const contract = new Contract(
         artifact as any,
         [wallet.pubKey, serverPubKeyHex],
         { provider }
       );
 
-      // 3. FIX: Handle PrivateKey buffer correctly for SignatureTemplate
+      // 3. Convert WIF to a PrivateKey object and then to a Buffer
       const privKey = bitcore.PrivateKey.fromWIF(wallet.privateKey);
-      const ownerSigner = new SignatureTemplate(privKey.toBuffer());
+      const ownerSigner = new SignatureTemplate(privKey.toWIF());
 
-      // 4. FIX: Use .functions (since your version doesn't support .fn)
-      const txDetails = await contract.functions
+      // 4. Use '.fn' instead of '.functions' for v0.12.1
+        const txDetails = await (contract as any).fn
         .reclaim(ownerSigner)
         .to(contract.address, 10000n)
         .send();
 
       if (txDetails.txid) {
         setTxHash(txDetails.txid);
-        console.log('Delegation Success TXID:', txDetails.txid);
         alert(`Delegation Successful! TXID: ${txDetails.txid}`);
       }
     } catch (err: any) {

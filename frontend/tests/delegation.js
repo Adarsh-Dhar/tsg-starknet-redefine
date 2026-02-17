@@ -7,61 +7,65 @@ async function main() {
   const address = 'bchtest:qr9ra8740euwwyxmand72tm5uaran43g4yer0y2qs7';
   const vaultAddress = 'bchtest:pvaultplaceholder123456789';
 
-  console.log('Using BCH Address:', address);
+  console.log('🔍 Querying Chipnet Ledger via Chaingraph...');
 
-  // 1. Fetch UTXOs (Switched to http to avoid SSL version mismatch)
-  let utxos = [];
+  // 1. GraphQL Query for UTXOs
+  const query = {
+    query: `
+    query GetUtxos($address: String!) {
+      address_by_pkh(address: $address) {
+        utxos {
+          tx_hash
+          output_index
+          value_satoshis
+          script_pubkey
+        }
+      }
+    }`,
+    variables: { address: address }
+  };
+
   try {
-    // Note: switched to http://
-    const utxoUrl = `http://chipnet.imaginary.cash/explorer-api/addr/${address}/utxo`;
-    const utxoRes = await fetch(utxoUrl);
-    if (!utxoRes.ok) throw new Error(`Status ${utxoRes.status}`);
-    utxos = await utxoRes.json();
-  } catch (e) {
-    console.error('❌ Failed to fetch UTXOs:', e.message);
-    console.log('Trying fallback URL...');
-    // Fallback to the main address-based API if the explorer-api path fails
-    const fallbackUrl = `http://chipnet.imaginary.cash/api/addr/${address}/utxo`;
-    const res = await fetch(fallbackUrl);
-    utxos = await res.json();
-  }
+    const res = await fetch('https://chipnet.chaingraph.cash/v1/graphql', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(query)
+    });
 
-  if (utxos.length === 0) {
-    console.error('❌ No UTXOs found. Please fund: https://chipnet.faucet.cash/');
-    process.exit(1);
-  }
+    const result = await res.json();
+    const data = result.data?.address_by_pkh?.[0];
 
-  // 2. Build Transaction
-  try {
+    if (!data || !data.utxos || data.utxos.length === 0) {
+      console.log('❌ Result: 0 UTXOs found.');
+      console.log('This means the faucet transaction did not reach this node yet.');
+      return;
+    }
+
+    const utxos = data.utxos.map(u => ({
+      txid: u.tx_hash.replace('\\x', ''),
+      vout: u.output_index,
+      satoshis: parseInt(u.value_satoshis),
+      script: u.script_pubkey.replace('\\x', '')
+    }));
+
+    console.log(`✅ Success! Found ${utxos.length} UTXOs.`);
+
+    // 2. Build Transaction
     const tx = new bitcore.Transaction()
       .from(utxos.map(u => ({
         txid: u.txid,
         outputIndex: u.vout,
-        script: u.scriptPubKey,
+        script: u.script,
         satoshis: u.satoshis
       })))
-      .to(vaultAddress, 5000) // Send a small amount
+      .to(vaultAddress, 5000)
       .change(address)
       .sign(privateKey);
 
-    console.log('✅ Transaction signed. Broadcasting to Imaginary.cash...');
+    console.log('✅ Tx Signed. Raw Hex:', tx.serialize());
 
-    // 3. Broadcast (Switched to http://)
-    const broadcastRes = await fetch('http://chipnet.imaginary.cash/explorer-api/tx/send', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ rawtx: tx.serialize() })
-    });
-
-    const result = await broadcastRes.json();
-    if (result.txid) {
-      console.log(`🚀 Success! TXID: ${result.txid}`);
-      console.log(`View: http://chipnet.imaginary.cash/tx/${result.txid}`);
-    } else {
-      console.error('❌ Broadcast failed:', result);
-    }
   } catch (err) {
-    console.error('❌ build/broadcast error:', err.message);
+    console.error('⚠️ System Error:', err.message);
   }
 }
 

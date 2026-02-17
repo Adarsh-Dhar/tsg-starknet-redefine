@@ -14,6 +14,9 @@ importers:
       bitcore-lib-cash:
         specifier: ^10.10.5
         version: 10.10.5
+      cashscript:
+        specifier: ^0.12.1
+        version: 0.12.1
       lucide-react:
         specifier: ^0.544.0
         version: 0.544.0(react@19.2.4)
@@ -153,6 +156,9 @@ packages:
   '@bitauth/libauth@3.1.0-next.8':
     resolution: {integrity: sha512-Pm+Ju+YP3JeBLLTiVrBnia2wwE4G17r4XqpvPRMcklElJTe8J6x3JgKRg1by0Xm3ZY6UFxACkEAoSA+x419/zA==}
     engines: {node: ^12.20.0 || ^14.13.1 || >=16.0.0}
+
+  '@cashscript/utils@0.12.1':
+    resolution: {integrity: sha512-dGVbbFMUHZJFjmLkGQNrM0/hzoXlJgM8bYU1J5cX80Vo5n7dmopctmxplgXGd3u/h6hBUt3V7lTawGi8DBupJQ==}
 
   '@electrum-cash/debug-logs@1.0.0':
     resolution: {integrity: sha512-GU/CvRR9lZ0d8gy9CXGW7f//OHCIydBavv9q+JcxjGj8Xr7HwlGqHx+Wzhx9y3YmJrXfExpgClcd++gTjdEmzA==}
@@ -321,6 +327,9 @@ packages:
     resolution: {integrity: sha512-BWfWUffbg3uO4K6Cyokg9ff43lPaXAOZcCnNe1lcjCjUMDVrRAb5qEHG5qeJp3ud2SPYbORaNsls5as6SR3oig==}
     peerDependencies:
       ws: '*'
+
+  '@mr-zwets/bchn-api-wrapper@1.0.2':
+    resolution: {integrity: sha512-hgtnepLQcR+ea2Qz2Kiua0LrtCO3Vx6JcgZMThml2KAut8/Y7w6Qb6g5tOjpE2ysFZfC3MGqYnFmxiBLfToxwA==}
 
   '@nodelib/fs.scandir@2.1.5':
     resolution: {integrity: sha512-vq24Bq3ym5HEQm2NKCr3yXDwjc7vTsEThRDnkp2DK9p1uqLR+DHurm/NOTo0KG7HYHU7eppKZj3MyqYuMBf62g==}
@@ -738,6 +747,9 @@ packages:
 
   caniuse-lite@1.0.30001769:
     resolution: {integrity: sha512-BCfFL1sHijQlBGWBMuJyhZUhzo7wer5sVj9hqekB/7xn0Ypy+pER/edCYQm4exbXj4WiySGp40P8UuTh6w1srg==}
+
+  cashscript@0.12.1:
+    resolution: {integrity: sha512-IGKipstPw+/N+Nr5YyZf7LH89o32cmoMZFYZsEYQdOhMJQKp/m8lxkug8bPTm3oee+zzO4vYpDCbsBCaAhuj/A==}
 
   chokidar@3.6.0:
     resolution: {integrity: sha512-7VT13fmjotKpGipCW9JEQAusEPE+Ei8nl6/g4FBAmIm0GOOLMua9NDDo/DWp0ZAxCr3cPq5ZpBqmPAQgDda2Pw==}
@@ -1245,6 +1257,9 @@ packages:
   pako@1.0.11:
     resolution: {integrity: sha512-4hLB8Py4zZce5s4yd9XzopqwVv/yGNhV1Bl8NTmCq1763HeK2+EwVTv+leGeL13Dnh2wfbqowVPXCIO0z4taYw==}
 
+  pako@2.1.0:
+    resolution: {integrity: sha512-w+eufiZ1WuJYgPXbV/PO3NCMEc3xqylkKHzp8bxp1uW4qaSNQUkwmLLEc3kKsfz8lpV1F8Ht3U1Cm+9Srog2ug==}
+
   parse-asn1@5.1.9:
     resolution: {integrity: sha512-fIYNuZ/HastSb80baGOuPRo1O9cf4baWw5WsAp7dBuUzeTD/BoaG8sVTdlPFksBE2lF21dN+A1AnrpIjSWqHHg==}
     engines: {node: '>= 0.10'}
@@ -1430,6 +1445,11 @@ packages:
 
   semver@6.3.1:
     resolution: {integrity: sha512-BR7VvDCVHO+q2xBEWskxS6DJE1qRnb7DxzUrogb71CWoSficBxYsiAGd+Kl0mmq/MprG9yArRkyrQxTO6XjMzA==}
+    hasBin: true
+
+  semver@7.7.4:
+    resolution: {integrity: sha512-vFKC2IEtQnVhpT78h1Yp8wzwrf8CM+MzKMHGJZfBtzhZNycRFnXsHk6E5TxIkkMsgNS7mdX3AGB7x2QM2di4lA==}
+    engines: {node: '>=10'}
     hasBin: true
 
   set-function-length@1.2.2:
@@ -1744,6 +1764,10 @@ snapshots:
 
   '@bitauth/libauth@3.1.0-next.8': {}
 
+  '@cashscript/utils@0.12.1':
+    dependencies:
+      '@bitauth/libauth': 3.1.0-next.8
+
   '@electrum-cash/debug-logs@1.0.0':
     dependencies:
       debug: 4.4.3
@@ -1868,6 +1892,8 @@ snapshots:
   '@monsterbitar/isomorphic-ws@5.3.1(ws@8.19.0)':
     dependencies:
       ws: 8.19.0
+
+  '@mr-zwets/bchn-api-wrapper@1.0.2': {}
 
   '@nodelib/fs.scandir@2.1.5':
     dependencies:
@@ -2269,6 +2295,19 @@ snapshots:
   camelcase-css@2.0.1: {}
 
   caniuse-lite@1.0.30001769: {}
+
+  cashscript@0.12.1:
+    dependencies:
+      '@bitauth/libauth': 3.1.0-next.8
+      '@cashscript/utils': 0.12.1
+      '@electrum-cash/network': 4.2.2
+      '@mr-zwets/bchn-api-wrapper': 1.0.2
+      pako: 2.1.0
+      semver: 7.7.4
+    transitivePeerDependencies:
+      - bufferutil
+      - supports-color
+      - utf-8-validate
 
   chokidar@3.6.0:
     dependencies:
@@ -2811,6 +2850,8 @@ snapshots:
 
   pako@1.0.11: {}
 
+  pako@2.1.0: {}
+
   parse-asn1@5.1.9:
     dependencies:
       asn1.js: 4.10.1
@@ -3013,6 +3054,8 @@ snapshots:
   scheduler@0.27.0: {}
 
   semver@6.3.1: {}
+
+  semver@7.7.4: {}
 
   set-function-length@1.2.2:
     dependencies:

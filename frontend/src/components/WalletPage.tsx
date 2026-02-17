@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import { ElectrumNetworkProvider, Contract, SignatureTemplate } from 'cashscript';
+import artifact from '../Delegation.json';
 import * as bitcore from 'bitcore-lib-cash';
 
 export default function WalletPage() {
@@ -8,30 +10,30 @@ export default function WalletPage() {
   const [vaultAddress, setVaultAddress] = useState<string | null>(null);
     const [txHash, setTxHash] = useState<string | null>(null);
 
-  // On mount, generate or load wallet from chrome.storage.local
+  // On mount, generate or load wallet from localStorage (for web context)
   useEffect(() => {
-    // Try to load from chrome.storage.local
-    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-      chrome.storage.local.get(['bchPrivateKey', 'bchAddress', 'bchPubKey'], (data) => {
-        if (data.bchPrivateKey && data.bchAddress && data.bchPubKey) {
-          setWallet({ privateKey: data.bchPrivateKey.toString(), address: data.bchAddress.toString(), pubKey: data.bchPubKey.toString() });
-        } else {
-          // Generate new wallet
-          const privateKey = new bitcore.PrivateKey();
-          const address = privateKey.toAddress().toString();
-          const pubKey = privateKey.toPublicKey().toString();
-          chrome.storage.local.set({ bchPrivateKey: privateKey.toWIF(), bchAddress: address, bchPubKey: pubKey }, () => {
-            setWallet({ privateKey: privateKey.toWIF(), address, pubKey });
-          });
-        }
-      });
+    const storedPriv = localStorage.getItem('bchPrivateKey');
+    const storedAddr = localStorage.getItem('bchAddress');
+    const storedPub = localStorage.getItem('bchPubKey');
+    if (storedPriv && storedAddr && storedPub) {
+      setWallet({ privateKey: storedPriv, address: storedAddr, pubKey: storedPub });
+    } else {
+      // Generate new wallet using bitcore-lib-cash
+      const privateKeyObj = new bitcore.PrivateKey();
+      const privateKey = privateKeyObj.toWIF();
+      const address = privateKeyObj.toAddress().toString();
+      const pubKey = privateKeyObj.toPublicKey().toString();
+      localStorage.setItem('bchPrivateKey', privateKey);
+      localStorage.setItem('bchAddress', address);
+      localStorage.setItem('bchPubKey', pubKey);
+      setWallet({ privateKey, address, pubKey });
     }
   }, []);
 
   // Fetch vault address from backend
   const fetchVaultAddress = async (pubKey: string) => {
     try {
-      const res = await fetch('http://localhost:3000/api/vault/create-vault', {
+      const res = await fetch('http://localhost:3333/api/vault/create-vault', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userPubKeyHex: pubKey })
@@ -55,44 +57,45 @@ export default function WalletPage() {
     }
   }, [wallet]);
 
-  // Delegate transaction logic
+  // Note: You need the server's public key to initialize the contract on the frontend
+  // You can fetch this from your backend or hardcode it if it's static
+  const serverPubKeyHex = "03..."; // TODO: Replace with actual server pubkey
+
+  // Real Delegation using CashScript
   const executeDelegationTx = async () => {
     if (!wallet || !vaultAddress) return alert('Wallet or vault not initialized!');
     setLoading(true);
     try {
-      // 1. Fetch UTXOs
-      const utxoRes = await fetch(`https://chipnet.imaginary.cash/v1/address/utxos/${wallet.address}`);
-      const utxos = await utxoRes.json();
-      if (!Array.isArray(utxos) || utxos.length === 0) {
-        setLoading(false);
-        return alert('No BCH UTXOs found for this address. Fund your wallet first.');
-      }
+      // 1. Use a stable provider (Loping is verified in your bash diagnostic)
+      const provider = new ElectrumNetworkProvider('chipnet');
 
-      // 2. Build the transaction
-      const tx = new bitcore.Transaction()
-        .from(utxos)
-        .to(vaultAddress, 10000) // 0.0001 BCH in satoshis
-        .change(wallet.address)
-        .sign(wallet.privateKey);
+      // 2. Initialize the Contract
+      const contract = new Contract(
+        artifact as any,
+        [wallet.pubKey, serverPubKeyHex],
+        { provider }
+      );
 
-      // 3. Broadcast
-      const broadcastRes = await fetch('https://chipnet.imaginary.cash/v1/rawtransactions/sendRawTransaction', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ hex: tx.serialize() })
-      });
-      const result = await broadcastRes.json();
-      setLoading(false);
-        if (result.txid) {
-          setTxHash(result.txid);
-          alert(`Delegation Successful! TXID: ${result.txid}`);
-        } else {
-          setTxHash(null);
-          alert('Broadcast failed: ' + JSON.stringify(result));
+      // 3. FIX: Handle PrivateKey buffer correctly for SignatureTemplate
+      const privKey = bitcore.PrivateKey.fromWIF(wallet.privateKey);
+      const ownerSigner = new SignatureTemplate(privKey.toBuffer());
+
+      // 4. FIX: Use .functions (since your version doesn't support .fn)
+      const txDetails = await contract.functions
+        .reclaim(ownerSigner)
+        .to(contract.address, 10000n)
+        .send();
+
+      if (txDetails.txid) {
+        setTxHash(txDetails.txid);
+        console.log('Delegation Success TXID:', txDetails.txid);
+        alert(`Delegation Successful! TXID: ${txDetails.txid}`);
       }
-    } catch (err) {
+    } catch (err: any) {
+      console.error('Delegation Error:', err);
+      alert('Delegation Failed: ' + err.message);
+    } finally {
       setLoading(false);
-      alert('TX Failed: ' + err);
     }
   };
 

@@ -1,16 +1,19 @@
-
 import express, { Request, Response } from 'express';
-import slashRouter from './routes/slash/route';
-import vaultRouter from './routes/vault';
+const slashRouter = require('./routes/slash/route');
+const vaultRouter = require('./routes/vault');
 import { initBackendWallet, backendPrivateKey, serverPubKeyHex } from './backendWallet';
+import cors from 'cors';
 
 // Initialize backend wallet and export public key for routes
 initBackendWallet();
 export { backendPrivateKey, serverPubKeyHex };
 
+
 const app = express();
 const PORT = 3333;
 
+// Enable CORS for all origins
+app.use(cors());
 // Middleware to parse JSON
 app.use(express.json());
 

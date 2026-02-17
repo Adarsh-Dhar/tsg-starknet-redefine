@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-export let backendPrivateKey: bitcore.PrivateKey;
+export let backendPrivateKey: any;
 export let serverPubKeyHex: string;
 
 export function initBackendWallet() {

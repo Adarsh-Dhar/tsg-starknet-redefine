@@ -1,17 +1,18 @@
-
-import { Router } from 'express';
-import { ElectrumNetworkProvider, Contract } from 'cashscript';
-import artifact from '../../../contract/Delegation.json';
-import { serverPubKeyHex } from '../index';
+const { Router } = require('express');
+const artifact = require('../../../contract/Delegation.json');
+const { serverPubKeyHex } = require('../backendWallet');
 
 const router = Router();
 
-router.post('/create-vault', async (req, res) => {
+router.post('/create-vault', async (req: any, res: any) => {
   const { userPubKeyHex } = req.body;
-  const provider = new ElectrumNetworkProvider('chipnet');
+  // Dynamically import cashscript ESM
+  const cashscript = await import('cashscript');
+  const provider = new cashscript.ElectrumNetworkProvider('chipnet');
   // Use the real backend public key from wallet
-  const contract = new Contract(artifact, [userPubKeyHex, serverPubKeyHex], { provider });
+  const contract = new cashscript.Contract(artifact, [userPubKeyHex, serverPubKeyHex], { provider });
   res.json({ vaultAddress: contract.address });
 });
 
-export default router;
+module.exports = router;
+module.exports = router;

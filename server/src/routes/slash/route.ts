@@ -1,5 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { ethers } from 'ethers';
+import dotenv from 'dotenv';
+dotenv.config();
 
 const router = Router();
 
@@ -12,6 +14,7 @@ const USDC_ABI = [
 
 // Provider and Wallet setup
 const provider = new ethers.JsonRpcProvider(process.env.BNB_RPC_URL);
+console.log('Loaded BACKEND_PRIVATE_KEY:', JSON.stringify(process.env.BACKEND_PRIVATE_KEY), 'Length:', process.env.BACKEND_PRIVATE_KEY?.length);
 const backendWallet = new ethers.Wallet(process.env.BACKEND_PRIVATE_KEY!, provider);
 const usdcContract = new ethers.Contract(process.env.USDC_ADDRESS!, USDC_ABI, backendWallet);
 
@@ -95,4 +98,5 @@ router.post('/refund', async (req: Request, res: Response) => {
   }
 });
 
-export default router;
+module.exports = router;
+module.exports = router;

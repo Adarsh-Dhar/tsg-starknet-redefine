@@ -1,8 +1,8 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors';
-import { initBackendWallet, serverPubKeyHex, backendPrivateKey } from './backendWallet';
+import { initBackendWallet, serverPubKeyHex, backendPrivateKey } from './backendWallet.js';
 import slashRouter from './routes/slash/route';
-import vaultRouter from './routes/vault/route';
+import vaultRouter from './routes/vault/route.js';
 
 // Initialize backend wallet
 initBackendWallet();

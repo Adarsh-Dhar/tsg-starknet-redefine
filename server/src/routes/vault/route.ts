@@ -1,8 +1,8 @@
 
 
 import { Router } from 'express';
-import artifact from '../../../../contract/Delegation.json';
-import { serverPubKeyHex, backendPrivateKey } from '../../backendWallet';
+import artifact from '../../../../contract/Delegation.json' with { type: 'json' };
+import { serverPubKeyHex, backendPrivateKey } from '../../backendWallet.js';
 
 const router = Router();
 

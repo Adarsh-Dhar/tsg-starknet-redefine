@@ -1,8 +1,8 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import { initBackendWallet } from './backendWallet';
-const slashRouter = require('./routes/slash/route');
-const vaultRouter = require('./routes/vault');
+import slashRouter from './routes/slash/route';
+import vaultRouter from './routes/vault';
 
 // Initialize backend wallet
 initBackendWallet();
@@ -20,8 +20,8 @@ app.get('/', (req: Request, res: Response) => {
 });
 
 // Mount routers on distinct sub-paths
-app.use('/api/slash', slashRouter);
-app.use('/api/vault', vaultRouter);
+app.use('/api/slash', slashRouter); // /api/slash/*
+app.use('/api/vault', vaultRouter); // /api/vault/*
 
 app.listen(PORT, () => {
   console.log(`Server is live at http://localhost:${PORT}`);

@@ -32,7 +32,7 @@ router.post('/ai-slash', async (req: Request, res: Response) => {
   }
   // Validate BSC address
   if (!ethers.isAddress(userPublicKey)) {
-    return res.status(400).json({ success: false, error: "Invalid BSC Address" });
+    return res.status(400).json({ success: false, error: "Invalid BSC Address provided. Must be a 0x... hex string." });
   }
   try {
     // [AI Analysis Logic remains the same - as per previous turn]

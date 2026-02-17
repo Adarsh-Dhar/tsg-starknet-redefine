@@ -1,11 +1,12 @@
 
-const { Router } = require('express');
-const artifact = require('../../../contract/Delegation.json');
-const { serverPubKeyHex } = require('../backendWallet');
+
+import { Router } from 'express';
+import artifact from '../../../contract/Delegation.json';
+import { serverPubKeyHex } from '../backendWallet';
 
 const router = Router();
 
-router.post('/vault/create-vault', async (req: any, res: any) => {
+router.post('/create-vault', async (req, res) => {
   try {
     if (!req.is('application/json')) {
       return res.status(400).json({ error: 'Invalid content-type, expected application/json' });
@@ -27,4 +28,3 @@ router.post('/vault/create-vault', async (req: any, res: any) => {
 });
 
 export default router;
-module.exports = router;

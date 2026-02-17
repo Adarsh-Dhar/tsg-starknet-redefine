@@ -78,7 +78,9 @@ export default function WalletPage() {
 
       // 3. Convert WIF to a PrivateKey object and then to a Buffer
       const privKey = bitcore.PrivateKey.fromWIF(wallet.privateKey);
-      const ownerSigner = new SignatureTemplate(privKey.toWIF());
+      const privateKeyBuffer = (privKey as any).bn.toBuffer({ size: 32 });
+
+      const ownerSigner = new SignatureTemplate(privateKeyBuffer);
 
       // 4. Use '.fn' instead of '.functions' for v0.12.1
         const txDetails = await (contract as any).fn

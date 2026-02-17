@@ -13,7 +13,7 @@ const USDC_ABI = [
 ];
 
 // Provider and Wallet setup
-const provider = new ethers.JsonRpcProvider(process.env.BNB_RPC_URL);
+const provider = new ethers.JsonRpcProvider(process.env.BSC_RPC_URL);
 console.log('Loaded BACKEND_PRIVATE_KEY:', JSON.stringify(process.env.BACKEND_PRIVATE_KEY), 'Length:', process.env.BACKEND_PRIVATE_KEY?.length);
 const backendWallet = new ethers.Wallet(process.env.BACKEND_PRIVATE_KEY!, provider);
 const usdcContract = new ethers.Contract(process.env.USDC_ADDRESS!, USDC_ABI, backendWallet);
@@ -25,6 +25,10 @@ function calculateExponentialScore(_mindsetMetadata: any) { return 0; }
 // AI-Slash Pipeline
 router.post('/ai-slash', async (req: Request, res: Response) => {
   const { userPublicKey, sessionTraceId, telemetryData, sessionDuration } = req.body;
+  // Validate required fields
+  if (!userPublicKey || !sessionTraceId || !telemetryData || !sessionDuration) {
+    return res.status(400).json({ error: 'Missing required fields in request body.' });
+  }
   try {
     // [AI Analysis Logic remains the same - as per previous turn]
     const exceedsThreshold = true; // Placeholder for intervention logic
@@ -55,6 +59,10 @@ router.post('/ai-slash', async (req: Request, res: Response) => {
 // Manual Slash
 router.post('/slash', async (req: Request, res: Response) => {
   const { userPublicKey, amount, metrics, mindsetMetadata } = req.body;
+  // Validate required fields
+  if (!userPublicKey || !amount) {
+    return res.status(400).json({ error: 'Missing userPublicKey or amount in request body.' });
+  }
   const dissociationIndex = calculateDissociationIndex(mindsetMetadata);
   const exponentialScore = calculateExponentialScore(mindsetMetadata);
   try {
@@ -98,5 +106,4 @@ router.post('/refund', async (req: Request, res: Response) => {
   }
 });
 
-module.exports = router;
-module.exports = router;
+export default router;

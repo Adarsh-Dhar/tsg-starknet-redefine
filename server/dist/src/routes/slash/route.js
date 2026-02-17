@@ -15,7 +15,7 @@ const USDC_ABI = [
     "function balanceOf(address owner) public view returns (uint256)"
 ];
 // Provider and Wallet setup
-const provider = new ethers_1.ethers.JsonRpcProvider(process.env.BNB_RPC_URL);
+const provider = new ethers_1.ethers.JsonRpcProvider(process.env.BSC_RPC_URL);
 console.log('Loaded BACKEND_PRIVATE_KEY:', JSON.stringify(process.env.BACKEND_PRIVATE_KEY), 'Length:', process.env.BACKEND_PRIVATE_KEY?.length);
 const backendWallet = new ethers_1.ethers.Wallet(process.env.BACKEND_PRIVATE_KEY, provider);
 const usdcContract = new ethers_1.ethers.Contract(process.env.USDC_ADDRESS, USDC_ABI, backendWallet);

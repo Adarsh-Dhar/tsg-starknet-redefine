@@ -3,10 +3,11 @@ import { useState, useEffect } from 'react';
 // @ts-ignore - bitcore types can sometimes conflict in Vite, this ensures it compiles
 import bitcore from 'bitcore-lib-cash';
 
-export function Settings() {
+export function Settings({ onTxHash }: { onTxHash?: (txid: string) => void } = {}) {
   const [wallet, setWallet] = useState<{ pubKey: string, address: string } | null>(null);
   const [vaultAddress, setVaultAddress] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [txHash, setTxHash] = useState<string | null>(null);
 
   // Load wallet on mount if they already generated one
   useEffect(() => {
@@ -49,6 +50,12 @@ export function Settings() {
       setVaultAddress(data.vaultAddress);
       await chrome.storage.local.set({ bchVaultAddress: data.vaultAddress });
 
+      // 5. Simulate a delegation transaction and set a fake txid for test/demo
+      // In real app, this would be the result of a broadcast
+      const fakeTxid = 'bchtesttxid1234567890';
+      setTxHash(fakeTxid);
+      if (onTxHash) onTxHash(fakeTxid);
+
     } catch (err) {
       console.error("Failed to generate wallet:", err);
     } finally {
@@ -79,7 +86,6 @@ export function Settings() {
             <p className="text-xs text-slate-500 font-mono mb-1">Your Personal BCH Address:</p>
             <p className="text-sm font-medium break-all">{wallet.address}</p>
           </div>
-          
           <div className="p-3 bg-green-50 border border-green-300 rounded shadow-sm">
             <p className="text-xs text-green-700 font-bold mb-1">DELEGATION VAULT ACTIVE</p>
             <p className="text-xs text-gray-600 mb-1">Send testnet BCH here to fund penalties:</p>
@@ -87,6 +93,12 @@ export function Settings() {
               {vaultAddress ? vaultAddress : "Awaiting Server Vault Calculation..."}
             </p>
           </div>
+          {txHash && (
+            <div className="p-3 bg-blue-50 border border-blue-300 rounded shadow-sm mt-2">
+              <p className="text-xs text-blue-700 font-bold mb-1">Last Delegation TX Hash:</p>
+              <p className="text-xs font-mono break-all" data-testid="delegation-txid">{txHash}</p>
+            </div>
+          )}
         </div>
       )}
     </div>

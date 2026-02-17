@@ -1,6 +1,12 @@
+
 import express, { Request, Response } from 'express';
 import slashRouter from './routes/slash/route';
 import vaultRouter from './routes/vault';
+import { initBackendWallet, backendPrivateKey, serverPubKeyHex } from './backendWallet';
+
+// Initialize backend wallet and export public key for routes
+initBackendWallet();
+export { backendPrivateKey, serverPubKeyHex };
 
 const app = express();
 const PORT = 3333;

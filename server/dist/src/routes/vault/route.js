@@ -1,28 +1,31 @@
 import { Router } from 'express';
-import artifact from '../../../../contract/Delegation.json' with { type: 'json' };
-import { serverPubKeyHex } from '../../backendWallet.js';
+import { ElectrumNetworkProvider, Contract } from 'cashscript';
+import { serverPubKeyHex } from '../../backendWallet.js'; // Note the .js extension
+import fs from 'fs';
+import { fileURLToPath } from 'url';
+import path from 'path';
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const router = Router();
+// Load artifact manually for ESM compatibility
+const artifactPath = path.resolve(__dirname, '../../../../contract/Delegation.json');
+const artifact = JSON.parse(fs.readFileSync(artifactPath, 'utf8'));
 router.post('/create-vault', async (req, res) => {
-    console.log("1");
     try {
-        console.log('Received vault creation request with body:', req.body);
-        if (!req.is('application/json')) {
-            return res.status(400).json({ error: 'Invalid content-type, expected application/json' });
+        let { userPubKeyHex } = req.body;
+        // Remove 0x prefix if present
+        if (typeof userPubKeyHex === 'string' && (userPubKeyHex.startsWith('0x') || userPubKeyHex.startsWith('0X'))) {
+            userPubKeyHex = userPubKeyHex.slice(2);
         }
-        const { userPubKeyHex } = req.body;
-        if (!userPubKeyHex) {
-            return res.status(400).json({ error: 'Missing userPubKeyHex in request body' });
+        // Validate hex string (compressed pubkey: 66 chars, uncompressed: 130 chars)
+        if (!userPubKeyHex || !/^[0-9a-fA-F]{66}$|^[0-9a-fA-F]{130}$/.test(userPubKeyHex)) {
+            return res.status(400).json({ error: 'Invalid userPubKeyHex format' });
         }
-        // Dynamically import cashscript ESM
-        const cashscript = await import('cashscript');
-        const provider = new cashscript.ElectrumNetworkProvider('chipnet');
-        // Use the real backend public key from wallet
-        const contract = new cashscript.Contract(artifact, [userPubKeyHex, serverPubKeyHex], { provider });
+        const provider = new ElectrumNetworkProvider('chipnet');
+        const contract = new Contract(artifact, [userPubKeyHex, serverPubKeyHex], { provider });
         res.json({ vaultAddress: contract.address });
     }
     catch (err) {
-        console.error('Vault creation error:', err);
-        res.status(500).json({ error: err.message || 'Internal server error' });
+        res.status(500).json({ error: err.message });
     }
 });
 export default router;

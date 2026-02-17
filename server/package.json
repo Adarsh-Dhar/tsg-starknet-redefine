@@ -12,11 +12,15 @@
   },
   "dependencies": {
     "@types/cors": "^2.8.19",
+    "axios": "^1.13.5",
     "cashscript": "^0.12.1",
     "cors": "^2.8.6",
     "dotenv": "^17.3.1",
     "ethers": "^6.16.0",
-    "express": "^5.2.1"
+    "express": "^5.2.1",
+    "multer": "^2.0.2",
+    "stream-chain": "^3.4.0",
+    "stream-json": "^1.9.1"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",

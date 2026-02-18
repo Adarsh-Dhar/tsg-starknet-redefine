@@ -33,6 +33,9 @@ export default function WalletPage() {
   // Fetch vault address from backend
   const fetchVaultAddress = async (pubKey: string) => {
     try {
+      // Log the pubKey value and length before sending
+      console.log('[DEBUG] Sending userPubKeyHex:', pubKey);
+      console.log('[DEBUG] Type:', typeof pubKey, 'Length:', pubKey ? pubKey.length : 'null');
       // Ensure endpoint matches backend: /api/vault/create-vault
       const res = await fetch('http://localhost:3333/api/vault/create-vault', {
         method: 'POST',

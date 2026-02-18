@@ -1,4 +1,4 @@
-import { redis } from '../redisClient';
+import { redis } from '../redisClient.js';
 
 /**
  * Get the user's vault address from DB (Redis or other DB)

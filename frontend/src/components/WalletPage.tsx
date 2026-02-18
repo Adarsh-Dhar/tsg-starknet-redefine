@@ -65,50 +65,70 @@ export default function WalletPage() {
   // You can fetch this from your backend or hardcode it if it's static
   const serverPubKeyHex = "03..."; // TODO: Replace with actual server pubkey
 
-  // Real Delegation using CashScript
+  // Delegation button logic: fund vault if empty, else trigger backend penalty
   const executeDelegationTx = async () => {
     if (!wallet || !vaultAddress) return alert('Wallet or vault not initialized!');
     setLoading(true);
     try {
       // 1. Initialize the provider for Chipnet
       const provider = new ElectrumNetworkProvider('chipnet');
-
       // 2. Initialize the Contract instance
       const contract = new Contract(
         artifact as any,
         [wallet.pubKey, serverPubKeyHex],
         { provider }
       );
-
-      // Debug: log contract instance and available unlock functions
-      console.log('[DEBUG] contract instance:', contract);
-      if (contract && contract.unlock) {
-        console.log('[DEBUG] contract.unlock:', Object.keys(contract.unlock));
-      } else {
-        console.error('[DEBUG] contract.unlock is undefined!');
-      }
-
-      // 3. Convert WIF to a PrivateKey object and then to a Buffer
-      const privKey = bitcore.PrivateKey.fromWIF(wallet.privateKey);
-      const privateKeyBuffer = (privKey as any).bn.toBuffer({ size: 32 });
-
-      const ownerSigner = new SignatureTemplate(privateKeyBuffer);
-
-
-      // 4. Use TransactionBuilder to spend from contract
+      // 3. Check if vault is funded (has UTXOs)
       const contractUtxos = await contract.getUtxos();
-      if (!contractUtxos.length) throw new Error('No contract UTXOs available');
-
-      // Build transaction
-      const { TransactionBuilder } = await import('cashscript');
-      const txBuilder = new TransactionBuilder({ provider });
-      txBuilder.addInput(contractUtxos[0], contract.unlock.reclaim(ownerSigner));
-      txBuilder.addOutput({ to: contract.address, amount: 10000n });
-      const txDetails = await txBuilder.send();
-
-      if (txDetails.txid) {
-        setTxHash(txDetails.txid);
-        alert(`Delegation Successful! TXID: ${txDetails.txid}`);
+      if (!contractUtxos.length) {
+        // Vault is empty, fund it with a small deposit
+        // Build and broadcast a funding transaction from user's wallet
+        // (This is a simplified example, production code should handle UTXO selection, fees, etc.)
+        const userPrivKey = bitcore.PrivateKey.fromWIF(wallet.privateKey);
+        const userAddress = wallet.address;
+        // Fetch UTXOs for user
+        const utxoRes = await fetch(`https://chipnet.imaginary.cash/api/address/${userAddress}/utxos`);
+        const utxos = await utxoRes.json();
+        if (!utxos.length) throw new Error('No BCH in wallet to fund vault');
+        const utxo = utxos[0];
+        const tx = new bitcore.Transaction()
+          .from(utxo)
+          .to(vaultAddress, 10000) // 10,000 sats (0.0001 BCH)
+          .change(userAddress)
+          .fee(500)
+          .sign(userPrivKey);
+        // Broadcast
+        const broadcastRes = await fetch('https://chipnet.imaginary.cash/api/tx/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ rawtx: tx.serialize() })
+        });
+        const broadcastData = await broadcastRes.json();
+        if (broadcastData.txid) {
+          setTxHash(broadcastData.txid);
+          alert(`Vault funded! TXID: ${broadcastData.txid}`);
+        } else {
+          throw new Error('Failed to broadcast funding transaction');
+        }
+      } else {
+        // Vault is already funded, trigger backend penalty logic
+        const slashRes = await fetch('http://localhost:3333/api/slash/ai-slash', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userPublicKey: wallet.pubKey,
+            sessionTraceId: 'frontend-trigger',
+            telemetryData: {},
+            sessionDuration: 0
+          })
+        });
+        const slashData = await slashRes.json();
+        if (slashData.success && slashData.txid) {
+          setTxHash(slashData.txid);
+          alert(`Penalty executed! TXID: ${slashData.txid}`);
+        } else {
+          throw new Error(slashData.error || 'Penalty execution failed');
+        }
       }
     } catch (err: any) {
       let errorMsg = 'Delegation Failed: ';

@@ -5,12 +5,17 @@ contract Delegation(pubkey ownerPk, pubkey delegatePk) {
 
     // Path 1: The server triggers a penalty
     function executePenalty(sig delegateSig) {
-        // Verifies the transaction is signed by the server's private key
+        // 1. Verify the server's signature
         require(checkSig(delegateSig, delegatePk));
-        
-        // Note: For a production environment, you would add Native Introspection here
-        // e.g., requiring that the output amount is strictly limited to the penalty fee,
-        // rather than allowing the delegate to drain the entire UTXO.
+
+        // 2. Enforce the Output Amount (Native Introspection)
+        // This ensures the server only takes exactly 5000 satoshis as a penalty
+        require(tx.outputs[0].value == 5000);
+
+        // 3. Enforce Destination
+        // Ensure the remaining funds (Change) go back to this same contract address
+        // prevent the delegate from draining the entire UTXO
+        require(tx.outputs[1].lockingBytecode == tx.inputs[this.activeInputIndex].lockingBytecode);
     }
 
     // Path 2: The user un-delegates and takes their funds back

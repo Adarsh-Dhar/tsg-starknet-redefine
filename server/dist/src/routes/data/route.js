@@ -1,177 +1,237 @@
 import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
+import { z } from 'zod';
+import axios from 'axios';
 import multer from 'multer';
 import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import axios from 'axios';
 import { chain } from 'stream-chain';
 import streamJsonPkg from 'stream-json';
 const { parser } = streamJsonPkg;
 import streamArrayPkg from 'stream-json/streamers/StreamArray.js';
 const { streamArray } = streamArrayPkg;
-import dotenv from 'dotenv';
-// ESM Support
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-dotenv.config();
+// Internal imports
+import { redis } from '../../redisClient.js';
+import { verifySignature } from '../../lib/verifySignature.js'; // Ensure this utility exists
+import { slashQueue } from '../../lib/queues.js'; // Ensure BullMQ/Bee-Queue is configured
 const router = Router();
 const upload = multer({ dest: 'uploads/' });
-// --- CONFIGURATION & WEIGHTS ---
-const CATEGORY_WEIGHTS = {
-    'News & Politics': 0.9,
-    'Education': 0.1,
-    'Science & Tech': 0.1,
-    'Comedy': 0.8,
-    'Entertainment': 0.7,
-    'Gaming': 0.6
+// --- CONFIGURATION & SCHEMAS ---
+const SESSION_KEY_PREFIX = 'brainrot:session:';
+const BASELINE_KEY_PREFIX = 'brainrot:baseline:';
+const SESSION_WINDOW = 10;
+const PHENOTYPE_CONFIG = {
+    ZOMBIE_VARIANCE_THRESHOLD: 15,
+    DOOM_VELOCITY_TRIGGER: 3.5,
+    RBP_START_HOUR: 22,
+    SESSION_GAP_SECONDS: 1200,
 };
-const DOOM_THRESHOLDS = {
-    VELOCITY_TRIGGER: 3.0,
-    SESSION_INERTIA: 30,
-    SHORT_DURATION: 60
-};
-// --- HELPER FUNCTIONS ---
-async function classifyContentType(videoId) {
-    try {
-        const response = await axios.head(`https://www.youtube.com/shorts/${videoId}`, {
-            maxRedirects: 0,
-            validateStatus: (status) => status >= 200 && status < 400
-        });
-        if (response.status === 200)
-            return 'SHORT';
-        if (response.status === 303)
-            return 'VIDEO';
-        return 'UNKNOWN';
-    }
-    catch (error) {
-        return 'UNKNOWN';
-    }
+// Rate Limiter: 30 requests per minute per IP
+export const dataRateLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 30,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Too many requests, please slow down.' },
+});
+// Zod Schema for Real-time Ingestion
+const IngestRealtimeSchema = z.object({
+    walletAddress: z.string().regex(/^([a-z0-9:]{10,})$/i, "Invalid wallet address format"),
+    videoId: z.string().min(3),
+    duration: z.number().int().positive().max(3600), // Max 1 hour per video
+    signature: z.string().min(64),
+    message: z.string().min(1),
+});
+// --- HELPERS ---
+async function getUserSession(walletAddress) {
+    const raw = await redis.get(SESSION_KEY_PREFIX + walletAddress);
+    if (!raw)
+        return { dwells: [], lastTimestamps: [], score: 0, lastUpdate: 0 };
+    return JSON.parse(raw);
 }
-function calculateImpliedDuration(currentDate, previousDate) {
-    const diffMs = Math.abs(previousDate.getTime() - currentDate.getTime());
-    return diffMs / 1000;
+async function setUserSession(walletAddress, session) {
+    await redis.set(SESSION_KEY_PREFIX + walletAddress, JSON.stringify(session), { EX: 86400 }); // 24h TTL
+}
+function calculateVariance(numbers) {
+    if (numbers.length < 2)
+        return 0;
+    const mean = numbers.reduce((a, b) => a + b) / numbers.length;
+    return numbers.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / (numbers.length - 1);
 }
 // --- ROUTES ---
-// 1. INGEST & STREAM PIPELINE
-router.post('/ingest', upload.single('history_file'), async (req, res) => {
-    if (!req.file)
-        return res.status(400).json({ error: 'No file provided' });
-    const results = [];
-    let processedCount = 0;
+/**
+ * @route POST /api/data/ingest/realtime
+ * @desc Production-level real-time ingestion with signature verification and async slashing
+ */
+router.post('/ingest/realtime', dataRateLimiter, async (req, res) => {
+    // 1. Validate Input
+    const parseResult = IngestRealtimeSchema.safeParse(req.body);
+    if (!parseResult.success) {
+        return res.status(400).json({ error: 'Invalid input', details: parseResult.error.issues });
+    }
+    const { walletAddress, videoId, duration, signature, message } = parseResult.data;
     try {
-        const pipeline = chain([
-            fs.createReadStream(req.file.path),
-            parser(),
-            streamArray(),
-            (data) => {
-                const item = data.value;
-                const videoIdMatch = item.titleUrl?.match(/v=([^&]+)/);
-                if (!videoIdMatch)
-                    return null;
-                return {
-                    videoId: videoIdMatch[1],
-                    title: item.title?.replace('Watched ', ''),
-                    timestamp: new Date(item.time),
-                    channelUrl: item.subtitles?.[0]?.url || null
-                };
+        // 2. Cryptographic Security: Verify that the user actually owns the wallet
+        const isOwner = await verifySignature(message, signature, walletAddress);
+        if (!isOwner) {
+            return res.status(401).json({ error: 'Unauthorized: Invalid signature' });
+        }
+        // 3. Session Management
+        const session = await getUserSession(walletAddress);
+        const now = Date.now();
+        session.dwells.push(duration);
+        session.lastTimestamps.push(now);
+        if (session.dwells.length > SESSION_WINDOW)
+            session.dwells.shift();
+        if (session.lastTimestamps.length > SESSION_WINDOW)
+            session.lastTimestamps.shift();
+        // 4. Scoring Engine
+        let scoreDelta = 0;
+        // A. Personalized Baseline Variance (Zombie Mode)
+        let baselineVariance = PHENOTYPE_CONFIG.ZOMBIE_VARIANCE_THRESHOLD;
+        const baselineKey = BASELINE_KEY_PREFIX + walletAddress;
+        const storedBaseline = await redis.get(baselineKey);
+        if (storedBaseline) {
+            baselineVariance = parseFloat(storedBaseline);
+        }
+        else if (session.dwells.length >= 10) {
+            baselineVariance = calculateVariance(session.dwells);
+            await redis.set(baselineKey, baselineVariance.toString(), { EX: 604800 }); // 1 week TTL
+        }
+        const currentVariance = calculateVariance(session.dwells);
+        if (session.dwells.length >= 5 && currentVariance < baselineVariance) {
+            scoreDelta += 10;
+        }
+        // B. Doomscrolling Velocity
+        if (session.lastTimestamps.length >= 2) {
+            const windowMs = session.lastTimestamps[session.lastTimestamps.length - 1] - session.lastTimestamps[0];
+            const velocity = session.dwells.length / (windowMs / 60000);
+            if (velocity > PHENOTYPE_CONFIG.DOOM_VELOCITY_TRIGGER) {
+                scoreDelta += 15;
             }
-        ]);
-        pipeline.on('data', (data) => {
-            if (data) {
-                results.push(data);
-                processedCount++;
+        }
+        // C. Content Classification (YouTube API with Regex Fallback)
+        let category = 'unknown';
+        const ytApiKey = process.env.YT_API_KEY;
+        try {
+            if (ytApiKey) {
+                const { data } = await axios.get(`https://www.googleapis.com/youtube/v3/videos`, {
+                    params: { part: 'snippet', id: videoId, key: ytApiKey }
+                });
+                category = data.items?.[0]?.snippet?.categoryId || 'unknown';
+                if (["23", "24"].includes(category))
+                    scoreDelta += 5; // Comedy/Ent
+                if (["27", "28"].includes(category))
+                    scoreDelta -= 10; // High-value content
             }
-        });
-        pipeline.on('error', (err) => {
-            console.error('Stream Pipeline error:', err);
-            if (fs.existsSync(req.file.path))
-                fs.unlinkSync(req.file.path);
-            if (!res.headersSent)
-                res.status(500).json({ error: err.message });
-        });
-        pipeline.on('end', () => {
-            if (fs.existsSync(req.file.path))
-                fs.unlinkSync(req.file.path);
-            res.json({
-                success: true,
-                message: 'Ingestion complete',
-                total_videos_scanned: processedCount,
-                preview: results.slice(0, 5)
+            else {
+                throw new Error('No API Key');
+            }
+        }
+        catch (apiError) {
+            // Robust Fallback: Regex matching on video tags/ID if API fails
+            if (/edu|learn|science|math|study|tech/i.test(videoId))
+                scoreDelta -= 5;
+            else if (/fun|lol|meme|prank/i.test(videoId))
+                scoreDelta += 5;
+        }
+        // D. Late Night Multiplier (RBP)
+        const hour = new Date(now).getHours();
+        if (hour >= PHENOTYPE_CONFIG.RBP_START_HOUR || hour < 5) {
+            scoreDelta *= 3;
+        }
+        // 5. Enforcement & Persistence
+        session.score += scoreDelta;
+        session.lastUpdate = now;
+        let slashed = false;
+        if (session.score >= 100) {
+            // Async Slashing: Don't wait for blockchain. Offload to BullMQ worker.
+            await slashQueue.add('execute-penalty', {
+                walletAddress,
+                reason: 'Threshold Exceeded',
+                score: session.score
             });
+            session.score = 0;
+            slashed = true;
+        }
+        await setUserSession(walletAddress, session);
+        return res.json({
+            success: true,
+            score: session.score,
+            slashed,
+            category,
+            message: slashed ? "Penalty enqueued for processing." : "Score updated."
         });
     }
-    catch (e) {
-        if (fs.existsSync(req.file.path))
-            fs.unlinkSync(req.file.path);
-        res.status(500).json({ success: false, error: e.message });
+    catch (error) {
+        console.error('Real-time ingestion error:', error);
+        return res.status(500).json({ error: 'Internal server error' });
     }
 });
-// 2. AUDIT & METRICS ENGINE
-router.post('/audit/doomscroll', async (req, res) => {
+/**
+ * @route POST /api/data/audit/advanced
+ * @desc Historical analysis for batch uploads (Google Takeout)
+ */
+router.post('/audit/advanced', async (req, res) => {
     const { historyData } = req.body;
     if (!historyData || !Array.isArray(historyData)) {
         return res.status(400).json({ error: 'Invalid history data format' });
     }
-    // Ensure descending order (newest first)
-    const sortedHistory = [...historyData].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    const sorted = [...historyData].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
     const sessions = [];
-    let currentSession = { videos: [], startTime: null, endTime: null };
-    for (let i = 0; i < sortedHistory.length - 1; i++) {
-        const current = sortedHistory[i];
-        const next = sortedHistory[i + 1];
-        const impliedDuration = calculateImpliedDuration(new Date(current.timestamp), new Date(next.timestamp));
-        currentSession.videos.push({ ...current, impliedDuration });
-        if (!currentSession.startTime)
-            currentSession.startTime = current.timestamp;
-        // Session break logic: > 20 mins gap
-        if (impliedDuration > (20 * 60)) {
-            currentSession.endTime = current.timestamp;
-            const startMs = new Date(currentSession.startTime).getTime();
-            const endMs = new Date(currentSession.endTime).getTime();
-            const sessionDurationMin = Math.abs(startMs - endMs) / 60000;
-            const videoCount = currentSession.videos.length;
-            const scrollVelocity = videoCount / (sessionDurationMin || 1);
-            const isDoomscroll = (scrollVelocity > DOOM_THRESHOLDS.VELOCITY_TRIGGER) &&
-                (sessionDurationMin > DOOM_THRESHOLDS.SESSION_INERTIA);
-            sessions.push({
-                date: currentSession.startTime,
-                duration_minutes: sessionDurationMin.toFixed(1),
-                video_count: videoCount,
-                scroll_velocity: scrollVelocity.toFixed(2),
-                phenotype: isDoomscroll ? 'DOOMSCROLL_DETECTED' : 'INTENTIONAL_VIEWING',
-                videos: [...currentSession.videos]
-            });
-            currentSession = { videos: [], startTime: null, endTime: null };
+    let currentSession = [];
+    for (let i = 0; i < sorted.length; i++) {
+        const current = sorted[i];
+        const next = sorted[i + 1];
+        const dwell = next ? (new Date(next.timestamp).getTime() - new Date(current.timestamp).getTime()) / 1000 : 0;
+        currentSession.push({ ...current, dwell });
+        if (!next || dwell > PHENOTYPE_CONFIG.SESSION_GAP_SECONDS) {
+            if (currentSession.length > 3) {
+                const dwells = currentSession.map(v => v.dwell).filter(d => d > 0 && d < 3600);
+                const variance = calculateVariance(dwells);
+                const velocity = currentSession.length / ((dwells.reduce((a, b) => a + b, 0) / 60) || 1);
+                sessions.push({
+                    startTime: currentSession[0].timestamp,
+                    videoCount: currentSession.length,
+                    metrics: { variance, velocity },
+                    isPathological: velocity > PHENOTYPE_CONFIG.DOOM_VELOCITY_TRIGGER
+                });
+            }
+            currentSession = [];
         }
     }
-    res.json({
-        success: true,
-        total_sessions_analyzed: sessions.length,
-        doomscroll_sessions: sessions.filter(s => s.phenotype === 'DOOMSCROLL_DETECTED').length,
-        data: sessions
-    });
+    res.json({ success: true, analysis: sessions });
 });
-// 3. ENRICHMENT & CLASSIFICATION ROUTE
-router.post('/classify', async (req, res) => {
-    const { videoIds } = req.body;
-    if (!videoIds || !Array.isArray(videoIds)) {
-        return res.status(400).json({ error: 'Missing videoIds array' });
-    }
-    try {
-        const classificationResults = [];
-        // Simple rate-limited serial loop
-        for (const id of videoIds) {
-            const type = await classifyContentType(id);
-            classificationResults.push({ id, type });
-            await new Promise(r => setTimeout(r, 100));
+/**
+ * @route POST /api/data/ingest
+ * @desc Stream-based processing for large JSON uploads
+ */
+router.post('/ingest', upload.single('history_file'), async (req, res) => {
+    if (!req.file)
+        return res.status(400).json({ error: 'No file provided' });
+    const results = [];
+    const pipeline = chain([
+        fs.createReadStream(req.file.path),
+        parser(),
+        streamArray(),
+        (data) => {
+            const item = data.value;
+            const videoId = item.titleUrl?.match(/v=([^&]+)/)?.[1];
+            return videoId ? {
+                videoId,
+                title: item.title?.replace('Watched ', ''),
+                timestamp: item.time
+            } : null;
         }
-        res.json({
-            success: true,
-            results: classificationResults
-        });
-    }
-    catch (e) {
-        res.status(500).json({ success: false, error: e.message });
-    }
+    ]);
+    pipeline.on('data', (d) => results.push(d));
+    pipeline.on('end', () => {
+        fs.unlinkSync(req.file.path);
+        res.json({ total: results.length, preview: results.slice(0, 5) });
+    });
+    pipeline.on('error', (err) => {
+        if (fs.existsSync(req.file.path))
+            fs.unlinkSync(req.file.path);
+        res.status(500).json({ error: err.message });
+    });
 });
 export default router;

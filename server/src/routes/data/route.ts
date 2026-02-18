@@ -11,9 +11,9 @@ import streamArrayPkg from 'stream-json/streamers/StreamArray.js';
 const { streamArray } = streamArrayPkg;
 
 // Internal imports
-import { redis } from '../../redisClient';
-import { verifySignature } from '../../lib/verifySignature'; // Ensure this utility exists
-import { slashQueue } from '../../lib/queues'; // Ensure BullMQ/Bee-Queue is configured
+import { redis } from '../../redisClient.js';
+import { verifySignature } from '../../lib/verifySignature.js'; // Ensure this utility exists
+import { slashQueue } from '../../lib/queues.js'; // Ensure BullMQ/Bee-Queue is configured
 
 const router = Router();
 const upload = multer({ dest: 'uploads/' });
@@ -65,7 +65,7 @@ async function getUserSession(walletAddress: string): Promise<UserSession> {
 }
 
 async function setUserSession(walletAddress: string, session: UserSession) {
-  await redis.set(SESSION_KEY_PREFIX + walletAddress, JSON.stringify(session), 'EX', 86400); // 24h TTL
+  await redis.set(SESSION_KEY_PREFIX + walletAddress, JSON.stringify(session), { EX: 86400 }); // 24h TTL
 }
 
 function calculateVariance(numbers: number[]): number {
@@ -118,7 +118,7 @@ router.post('/ingest/realtime', dataRateLimiter, async (req: Request, res: Respo
       baselineVariance = parseFloat(storedBaseline);
     } else if (session.dwells.length >= 10) {
       baselineVariance = calculateVariance(session.dwells);
-      await redis.set(baselineKey, baselineVariance.toString(), 'EX', 604800); // 1 week TTL
+      await redis.set(baselineKey, baselineVariance.toString(), { EX: 604800 }); // 1 week TTL
     }
 
     const currentVariance = calculateVariance(session.dwells);

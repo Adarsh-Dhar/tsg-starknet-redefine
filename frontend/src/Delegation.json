@@ -30,20 +30,28 @@
       ]
     }
   ],
-  "bytecode": "OP_2 OP_PICK OP_0 OP_NUMEQUAL OP_IF OP_3 OP_ROLL OP_ROT OP_CHECKSIG OP_NIP OP_NIP OP_ELSE OP_ROT OP_1 OP_NUMEQUALVERIFY OP_ROT OP_SWAP OP_CHECKSIG OP_NIP OP_ENDIF",
-  "source": "pragma cashscript ^0.12.1;\n\n// The contract is initialized with the User's PubKey and the Server's (Delegate) PubKey\ncontract Delegation(pubkey ownerPk, pubkey delegatePk) {\n\n    // Path 1: The server triggers a penalty\n    function executePenalty(sig delegateSig) {\n        // Verifies the transaction is signed by the server's private key\n        require(checkSig(delegateSig, delegatePk));\n        \n        // Note: For a production environment, you would add Native Introspection here\n        // e.g., requiring that the output amount is strictly limited to the penalty fee,\n        // rather than allowing the delegate to drain the entire UTXO.\n    }\n\n    // Path 2: The user un-delegates and takes their funds back\n    function reclaim(sig ownerSig) {\n        // Verifies the transaction is signed by the user's private key\n        require(checkSig(ownerSig, ownerPk));\n    }\n}",
+  "bytecode": "OP_2 OP_PICK OP_0 OP_NUMEQUAL OP_IF OP_3 OP_ROLL OP_ROT OP_CHECKSIGVERIFY OP_0 OP_OUTPUTVALUE 8813 OP_NUMEQUALVERIFY OP_1 OP_OUTPUTBYTECODE OP_INPUTINDEX OP_UTXOBYTECODE OP_EQUAL OP_NIP OP_NIP OP_ELSE OP_ROT OP_1 OP_NUMEQUALVERIFY OP_ROT OP_SWAP OP_CHECKSIG OP_NIP OP_ENDIF",
+  "source": "pragma cashscript ^0.12.1;\n\n// The contract is initialized with the User's PubKey and the Server's (Delegate) PubKey\ncontract Delegation(pubkey ownerPk, pubkey delegatePk) {\n\n    // Path 1: The server triggers a penalty\n    function executePenalty(sig delegateSig) {\n        // 1. Verify the server's signature\n        require(checkSig(delegateSig, delegatePk));\n\n        // 2. Enforce the Output Amount (Native Introspection)\n        // This ensures the server only takes exactly 5000 satoshis as a penalty\n        require(tx.outputs[0].value == 5000);\n\n        // 3. Enforce Destination\n        // Ensure the remaining funds (Change) go back to this same contract address\n        // prevent the delegate from draining the entire UTXO\n        require(tx.outputs[1].lockingBytecode == tx.inputs[this.activeInputIndex].lockingBytecode);\n    }\n\n    // Path 2: The user un-delegates and takes their funds back\n    function reclaim(sig ownerSig) {\n        // Verifies the transaction is signed by the user's private key\n        require(checkSig(ownerSig, ownerPk));\n    }\n}",
   "debug": {
-    "bytecode": "5279009c63537a7bac7777677b519d7b7cac7768",
-    "sourceMap": "7:4:14:5;;;;;9:25:9:36;;:38::48;:8::51:1;7:4:14:5;;;17::20::0;;;19:25:19:33;:35::42;:8::45:1;17:4:20:5;4:0:21:1",
+    "bytecode": "5279009c63537a7bad00cc0288139d51cdc0c7877777677b519d7b7cac7768",
+    "sourceMap": "7:4:19:5;;;;;9:25:9:36;;:38::48;:8::51:1;13:27:13:28:0;:16::35:1;:39::43:0;:8::45:1;18:27:18:28:0;:16::45:1;:59::80:0;:49::97:1;:8::99;7:4:19:5;;;22::25::0;;;24:25:24:33;:35::42;:8::45:1;22:4:25:5;4:0:26:1",
     "logs": [],
     "requires": [
       {
-        "ip": 11,
+        "ip": 10,
         "line": 9
       },
       {
+        "ip": 14,
+        "line": 13
+      },
+      {
         "ip": 20,
-        "line": 19
+        "line": 18
+      },
+      {
+        "ip": 29,
+        "line": 24
       }
     ]
   },
@@ -51,5 +59,5 @@
     "name": "cashc",
     "version": "0.12.1"
   },
-  "updatedAt": "2026-02-16T13:05:01.067Z"
+  "updatedAt": "2026-02-18T12:04:05.985Z"
 }

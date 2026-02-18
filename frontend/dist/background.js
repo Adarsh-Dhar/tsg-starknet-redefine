@@ -132,10 +132,23 @@ function notifyGoalExceeded(dailyGoal) {
   });
 }
 
+
 // Listen for extension install/update
 chrome.runtime.onInstalled.addListener(async () => {
   await initializeStorage();
   console.log('Touch Some Grass extension installed!');
+
+  // Register content script for YouTube Shorts
+  chrome.scripting?.registerContentScripts?.([
+    {
+      id: 'shorts-observer',
+      matches: ['https://www.youtube.com/shorts/*'],
+      js: ['shorts-observer.js'],
+      runAt: 'document_idle',
+      allFrames: false,
+      persistAcrossSessions: true,
+    },
+  ]);
 });
 
 // Initialize on startup

@@ -7,7 +7,8 @@
     "storage",
     "activeTab",
     "scripting",
-    "tabs"
+    "tabs",
+    "notifications"
   ],
   "host_permissions": [
     "http://localhost:3333/*",
@@ -21,6 +22,6 @@
     "default_popup": "index.html"
   },
   "content_security_policy": {
-    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; connect-src 'self' http://localhost:3333 https://*.imaginary.cash;"
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; connect-src 'self' http://localhost:3333 https://*.imaginary.cash wss://chipnet.bch.ninja:50004/;"
   }
 }

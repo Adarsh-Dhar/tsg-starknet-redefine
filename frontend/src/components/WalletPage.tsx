@@ -80,25 +80,55 @@ export default function WalletPage() {
         { provider }
       );
 
+      // Debug: log contract instance and available unlock functions
+      console.log('[DEBUG] contract instance:', contract);
+      if (contract && contract.unlock) {
+        console.log('[DEBUG] contract.unlock:', Object.keys(contract.unlock));
+      } else {
+        console.error('[DEBUG] contract.unlock is undefined!');
+      }
+
       // 3. Convert WIF to a PrivateKey object and then to a Buffer
       const privKey = bitcore.PrivateKey.fromWIF(wallet.privateKey);
       const privateKeyBuffer = (privKey as any).bn.toBuffer({ size: 32 });
 
       const ownerSigner = new SignatureTemplate(privateKeyBuffer);
 
-      // 4. Use '.fn' instead of '.functions' for v0.12.1
-        const txDetails = await (contract as any).fn
-        .reclaim(ownerSigner)
-        .to(contract.address, 10000n)
-        .send();
+
+      // 4. Use TransactionBuilder to spend from contract
+      const contractUtxos = await contract.getUtxos();
+      if (!contractUtxos.length) throw new Error('No contract UTXOs available');
+
+      // Build transaction
+      const { TransactionBuilder } = await import('cashscript');
+      const txBuilder = new TransactionBuilder({ provider });
+      txBuilder.addInput(contractUtxos[0], contract.unlock.reclaim(ownerSigner));
+      txBuilder.addOutput({ to: contract.address, amount: 10000n });
+      const txDetails = await txBuilder.send();
 
       if (txDetails.txid) {
         setTxHash(txDetails.txid);
         alert(`Delegation Successful! TXID: ${txDetails.txid}`);
       }
     } catch (err: any) {
+      let errorMsg = 'Delegation Failed: ';
+      if (err instanceof Error) {
+        errorMsg += err.message;
+        if (err.stack) {
+          errorMsg += '\nStack: ' + err.stack;
+        }
+      } else if (typeof err === 'object' && err !== null) {
+        try {
+          errorMsg += JSON.stringify(err);
+        } catch (e) {
+          errorMsg += '[object with circular refs]';
+        }
+      } else {
+        errorMsg += String(err);
+      }
+      // Also log to console for developer debugging
       console.error('Delegation Error:', err);
-      alert('Delegation Failed: ' + err.message);
+      alert(errorMsg);
     } finally {
       setLoading(false);
     }

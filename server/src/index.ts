@@ -3,10 +3,17 @@ import cors from 'cors';
 import { initBackendWallet, serverPubKeyHex, backendPrivateKey } from './backendWallet.js';
 import slashRouter from './routes/slash/route.js';
 import vaultRouter from './routes/vault/route.js';
-import dataRouter from './routes/data/route.js';
+import dataRouter, { dataRateLimiter } from './routes/data/route.js';
+import { connectRedis } from './redisClient.js';
 
-// Initialize backend wallet
+
+// Initialize backend wallet and persistent Redis connection
 initBackendWallet();
+connectRedis().then(() => {
+  console.log('Redis connected (pooled)');
+}).catch((err) => {
+  console.error('Redis connection failed:', err);
+});
 
 const app = express();
 const PORT = 3333;
@@ -23,7 +30,7 @@ app.get('/', (req: Request, res: Response) => {
 // Mount routers on distinct sub-paths
 app.use('/api/slash', slashRouter); // /api/slash/*
 app.use('/api/vault', vaultRouter); // /api/vault/*
-app.use('/api/data', dataRouter); // /api/data/*
+app.use('/api/data', dataRateLimiter, dataRouter); // /api/data/*
 
 app.listen(PORT, () => {
   console.log(`Server is live at http://localhost:${PORT}`);

@@ -1,3 +1,5 @@
+
+
 import { redis } from '../redisClient.js';
 
 /**
@@ -10,4 +12,14 @@ export async function getUserVaultAddress(walletAddress: string): Promise<string
   const key = `vault:${walletAddress}`;
   const vaultAddress = await redis.get(key);
   return vaultAddress || null;
+}
+
+/**
+ * Set the user's vault address in DB (Redis or other DB)
+ * @param walletAddress string
+ * @param vaultAddress string
+ */
+export async function setUserVaultAddress(walletAddress: string, vaultAddress: string): Promise<void> {
+  const key = `vault:${walletAddress}`;
+  await redis.set(key, vaultAddress);
 }

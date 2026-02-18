@@ -58,7 +58,17 @@ router.post('/ai-slash', async (req, res) => {
         return res.status(200).json({ success: true, vaultAddress, txid: tx.txid });
     }
     catch (err) {
-        return res.status(500).json({ success: false, error: err.message });
+        let errorMsg = 'Unknown error';
+        if (err instanceof Error) {
+            errorMsg = err.message;
+        }
+        else if (typeof err === 'object' && err !== null && 'message' in err) {
+            errorMsg = err.message;
+        }
+        else {
+            errorMsg = String(err);
+        }
+        return res.status(500).json({ success: false, error: errorMsg });
     }
 });
 export default router;

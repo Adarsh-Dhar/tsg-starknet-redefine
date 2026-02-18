@@ -61,9 +61,15 @@ export default function WalletPage() {
     }
   }, [wallet]);
 
-  // Note: You need the server's public key to initialize the contract on the frontend
-  // You can fetch this from your backend or hardcode it if it's static
-  const serverPubKeyHex = "03..."; // TODO: Replace with actual server pubkey
+  // Dynamically fetch the server's public key from the backend
+  const [serverPubKeyHex, setServerPubKeyHex] = useState<string>("");
+
+  useEffect(() => {
+    fetch('http://localhost:3333/api/vault/server-pubkey')
+      .then(res => res.json())
+      .then(data => setServerPubKeyHex(data.pubKey))
+      .catch(err => console.error('Failed to fetch server pubkey:', err));
+  }, []);
 
   // Delegation button logic: fund vault if empty, else trigger backend penalty
   const executeDelegationTx = async () => {

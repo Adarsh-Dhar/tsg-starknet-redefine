@@ -10,10 +10,12 @@
     "lint": "eslint ."
   },
   "dependencies": {
+    "@starknet-io/get-starknet": "^4.0.8",
     "lucide-react": "^0.544.0",
     "react": "^19",
     "react-dom": "^19",
-    "react-router-dom": "^7.13.0"
+    "react-router-dom": "^7.13.0",
+    "starknet": "^9.2.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.13",

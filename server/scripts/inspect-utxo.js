@@ -5,7 +5,8 @@
 import { ElectrumNetworkProvider } from 'cashscript';
 
 
-const provider = new ElectrumNetworkProvider('chipnet');
+// Try an alternative Chipnet Electrum server
+const provider = new ElectrumNetworkProvider({ network: 'chipnet', electrum: { host: 'chipnet.imaginary.cash', port: 50001, protocol: 'tcp' } });
 
 
 async function inspectUtxos(address) {

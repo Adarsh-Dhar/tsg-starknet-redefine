@@ -19,7 +19,7 @@ mod GravityVault {
 
     #[storage]
     struct Storage {
-        owner: ContractAddress,
+        // Removed 'owner'
         delegate: ContractAddress,
         balances: Map<ContractAddress, u256>,
         token_address: ContractAddress,
@@ -28,11 +28,9 @@ mod GravityVault {
     #[constructor]
     fn constructor(
         ref self: ContractState, 
-        owner_addr: ContractAddress, 
-        delegate_addr: ContractAddress,
-        token: ContractAddress
+        delegate_addr: ContractAddress, // The Server's address
+        token: ContractAddress          // STRK or ETH token address
     ) {
-        self.owner.write(owner_addr);
         self.delegate.write(delegate_addr);
         self.token_address.write(token);
     }
@@ -59,7 +57,7 @@ mod GravityVault {
 
         fn reclaim(ref self: ContractState) {
             let caller = get_caller_address();
-            assert(caller == self.owner.read(), 'ONLY_OWNER_CAN_RECLAIM');
+            // Allow ANY user to reclaim their OWN funds
             let amount = self.balances.read(caller);
             assert(amount > 0, 'NO_FUNDS_TO_RECLAIM');
             self.balances.write(caller, 0);

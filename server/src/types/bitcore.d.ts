@@ -1,2 +1,1 @@
-declare module 'bitcore-lib-cash';
-declare module 'bitcore-mnemonic';
+// BCH/bitcore types removed. File deprecated.

@@ -11,7 +11,6 @@ import streamArrayPkg from 'stream-json/streamers/StreamArray.js';
 const { streamArray } = streamArrayPkg;
 
 // Internal imports leveraging local project architecture
-import { redis } from '../../redisClient.js';
 import { verifySignature } from '../../lib/verifySignature.js'; 
 import { slashQueue } from '../../lib/queues.js'; 
 
@@ -58,14 +57,16 @@ interface UserSession {
 
 // --- HELPERS ---
 
+// In-memory session store (for dev only, not persistent!)
+const _sessionStore: Record<string, UserSession> = {};
+const _baselineStore: Record<string, string> = {};
+
 async function getUserSession(walletAddress: string): Promise<UserSession> {
-  const raw = await redis.get(SESSION_KEY_PREFIX + walletAddress);
-  if (!raw) return { dwells: [], lastTimestamps: [], score: 0, lastUpdate: 0 };
-  return JSON.parse(raw);
+  return _sessionStore[walletAddress] || { dwells: [], lastTimestamps: [], score: 0, lastUpdate: 0 };
 }
 
 async function setUserSession(walletAddress: string, session: UserSession) {
-  await redis.set(SESSION_KEY_PREFIX + walletAddress, JSON.stringify(session), { EX: 86400 });
+  _sessionStore[walletAddress] = session;
 }
 
 function calculateVariance(numbers: number[]): number {
@@ -106,13 +107,12 @@ router.post('/ingest/realtime', dataRateLimiter, async (req: Request, res: Respo
     // A. Variance Scoring (Zombie Mode)
     let baselineVariance = PHENOTYPE_CONFIG.ZOMBIE_VARIANCE_THRESHOLD;
     const baselineKey = BASELINE_KEY_PREFIX + walletAddress;
-    const storedBaseline = await redis.get(baselineKey);
-    
+    const storedBaseline = _baselineStore[baselineKey];
     if (storedBaseline) {
       baselineVariance = parseFloat(storedBaseline);
     } else if (session.dwells.length >= 10) {
       baselineVariance = calculateVariance(session.dwells);
-      await redis.set(baselineKey, baselineVariance.toString(), { EX: 604800 });
+      _baselineStore[baselineKey] = baselineVariance.toString();
     }
 
     const currentVariance = calculateVariance(session.dwells);

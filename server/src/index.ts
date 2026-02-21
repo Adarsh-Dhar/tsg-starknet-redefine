@@ -1,19 +1,8 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors';
-import { initBackendWallet, serverPubKeyHex, backendPrivateKey } from './backendWallet.js';
 import slashRouter from './routes/slash/route.js';
 import vaultRouter from './routes/vault/route.js';
 import dataRouter, { dataRateLimiter } from './routes/data/route.js';
-import { connectRedis } from './redisClient.js';
-
-
-// Initialize backend wallet and persistent Redis connection
-initBackendWallet();
-connectRedis().then(() => {
-  console.log('Redis connected (pooled)');
-}).catch((err) => {
-  console.error('Redis connection failed:', err);
-});
 
 const app = express();
 const PORT = 3333;

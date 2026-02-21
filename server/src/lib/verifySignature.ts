@@ -2,7 +2,7 @@
 import { ethers } from "ethers";
 
 /**
- * Verifies a message signature against a wallet address (Ethereum/BCH P2PKH)
+ * Verifies a message signature against a wallet address (Ethereum)
  * @param message - The original message string
  * @param signature - The signature (hex string)
  * @param walletAddress - The public address to verify against
@@ -13,7 +13,7 @@ export async function verifySignature(message: string, signature: string, wallet
     // Ethereum-style recovery
     const recovered = ethers.verifyMessage(message, signature);
     if (recovered.toLowerCase() === walletAddress.toLowerCase()) return true;
-    // TODO: Add BCH P2PKH signature verification if needed
+    // BCH signature verification removed
     return false;
   } catch (e) {
     return false;

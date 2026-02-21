@@ -8,7 +8,6 @@ const { parser } = streamJsonPkg;
 import streamArrayPkg from 'stream-json/streamers/StreamArray.js';
 const { streamArray } = streamArrayPkg;
 // Internal imports leveraging local project architecture
-import { redis } from '../../redisClient.js';
 import { verifySignature } from '../../lib/verifySignature.js';
 import { slashQueue } from '../../lib/queues.js';
 const router = Router();
@@ -40,14 +39,14 @@ const IngestRealtimeSchema = z.object({
     message: z.string().min(1),
 });
 // --- HELPERS ---
+// In-memory session store (for dev only, not persistent!)
+const _sessionStore = {};
+const _baselineStore = {};
 async function getUserSession(walletAddress) {
-    const raw = await redis.get(SESSION_KEY_PREFIX + walletAddress);
-    if (!raw)
-        return { dwells: [], lastTimestamps: [], score: 0, lastUpdate: 0 };
-    return JSON.parse(raw);
+    return _sessionStore[walletAddress] || { dwells: [], lastTimestamps: [], score: 0, lastUpdate: 0 };
 }
 async function setUserSession(walletAddress, session) {
-    await redis.set(SESSION_KEY_PREFIX + walletAddress, JSON.stringify(session), { EX: 86400 });
+    _sessionStore[walletAddress] = session;
 }
 function calculateVariance(numbers) {
     if (numbers.length < 2)
@@ -82,13 +81,13 @@ router.post('/ingest/realtime', dataRateLimiter, async (req, res) => {
         // A. Variance Scoring (Zombie Mode)
         let baselineVariance = PHENOTYPE_CONFIG.ZOMBIE_VARIANCE_THRESHOLD;
         const baselineKey = BASELINE_KEY_PREFIX + walletAddress;
-        const storedBaseline = await redis.get(baselineKey);
+        const storedBaseline = _baselineStore[baselineKey];
         if (storedBaseline) {
             baselineVariance = parseFloat(storedBaseline);
         }
         else if (session.dwells.length >= 10) {
             baselineVariance = calculateVariance(session.dwells);
-            await redis.set(baselineKey, baselineVariance.toString(), { EX: 604800 });
+            _baselineStore[baselineKey] = baselineVariance.toString();
         }
         const currentVariance = calculateVariance(session.dwells);
         if (session.dwells.length >= 5 && currentVariance < baselineVariance)

@@ -1,6 +1,8 @@
 
 
-import { redis } from '../redisClient.js';
+
+// In-memory vault address store (for dev only, not persistent!)
+const _vaultStore: Record<string, string> = {};
 
 /**
  * Get the user's vault address from DB (Redis or other DB)
@@ -8,10 +10,8 @@ import { redis } from '../redisClient.js';
  * @returns vaultAddress string | null
  */
 export async function getUserVaultAddress(walletAddress: string): Promise<string | null> {
-  // Example: Store vault address in Redis with key `vault:<walletAddress>`
-  const key = `vault:${walletAddress}`;
-  const vaultAddress = await redis.get(key);
-  return vaultAddress || null;
+  // In-memory only
+  return _vaultStore[walletAddress] || null;
 }
 
 /**
@@ -20,6 +20,5 @@ export async function getUserVaultAddress(walletAddress: string): Promise<string
  * @param vaultAddress string
  */
 export async function setUserVaultAddress(walletAddress: string, vaultAddress: string): Promise<void> {
-  const key = `vault:${walletAddress}`;
-  await redis.set(key, vaultAddress);
+  _vaultStore[walletAddress] = vaultAddress;
 }

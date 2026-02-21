@@ -13,22 +13,28 @@ export default function WalletPage() {
   const [amount, setAmount] = useState('');
   const [loading, setLoading] = useState(false);
   const [txHash, setTxHash] = useState('');
+  const [wallets, setWallets] = useState<any[]>([]);
+  const [selectedWallet, setSelectedWallet] = useState<any>(null);
+
+  // Fetch available wallets on mount (fallback: use connect to trigger modal)
+  // If you want to show a modal for wallet selection, use connect({ modalMode: "alwaysAsk" })
+  // For now, we clear wallets list and let connect handle wallet selection
+  useEffect(() => {
+    setWallets([]);
+  }, []);
 
   const handleConnect = async () => {
     try {
-      const selectedWallet = await connect({
-        modalMode: "alwaysAsk",
-        modalTheme: "dark",
-      });
-
-      if (selectedWallet && selectedWallet.name) {
-        setConnection(selectedWallet);
-        console.log("Connected wallet:", selectedWallet.name);
-        console.log("Account address:", selectedWallet);
-        setAddress(selectedWallet.id);
+      const selected = await connect({ modalMode: "alwaysAsk", modalTheme: "dark" });
+      if (selected) {
+        setConnection(selected);
+        // StarknetWindowObject may not expose address directly; show a warning or set to empty string
+        setAddress('');
+        // Optionally, you can log the selected object to inspect available properties
+        // console.log('Selected wallet:', selected);
       }
     } catch (error) {
-      console.error("Braavos connection failed:", error);
+      console.error("Wallet connection failed:", error);
     }
   };
 
@@ -96,14 +102,14 @@ export default function WalletPage() {
           className="group relative flex items-center gap-3 px-8 py-4 rounded-xl bg-emerald-500 text-slate-900 font-bold text-lg hover:bg-emerald-400 transition-all active:scale-95 shadow-[0_0_20px_rgba(16,185,129,0.3)]"
         >
           <Wallet className="w-6 h-6" />
-          Connect Braavos
+          Connect Wallet
         </button>
       ) : (
         <div className="w-full space-y-6">
           <div className="p-4 rounded-xl bg-slate-900/40 border border-emerald-500/10 flex justify-between items-center">
             <span className="text-emerald-300/60 text-sm uppercase tracking-wider font-bold">Account</span>
             <span className="text-emerald-100 font-mono text-sm">
-              {address.slice(0, 6)}...{address.slice(-4)}
+              {address ? `${address.slice(0, 6)}...${address.slice(-4)}` : '—'}
             </span>
           </div>
 

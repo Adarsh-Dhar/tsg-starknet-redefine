@@ -21,7 +21,7 @@ class ErrorBoundary extends Component<{ children: React.ReactNode }, { hasError:
   }
 }
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Trophy, Lightbulb, Wallet as WalletIcon } from 'lucide-react';
+import { LayoutDashboard, Trophy, Lightbulb, Wallet as WalletIcon, DatabaseIcon } from 'lucide-react';
 import Dashboard from './components/Dashboard';
 import LeaderboardPage from './LeaderboardPage';
 import InsightsPage from './InsightsPage';
@@ -56,7 +56,7 @@ function AppContent() {
                 { path: '/leaderboard', icon: Trophy, label: 'Leaderboard' },
                 { path: '/insights', icon: Lightbulb, label: 'Insights' },
                 { path: '/wallet', icon: WalletIcon, label: 'Wallet' },
-                { path: '/data', icon: Database, label: 'Data' },
+                { path: '/data', icon: DatabaseIcon, label: 'Data' },
               ].map(({ path, icon: Icon, label }) => (
                 <Link
                   key={path}

@@ -41,6 +41,7 @@ export default function DataPage() {
       });
       
       const data = await response.json();
+      console.log("Ingestion response:", data);
       
       if (response.ok) {
         setUploadStatus('success');
@@ -65,6 +66,7 @@ export default function DataPage() {
         body: JSON.stringify({ historyData }),
       });
       const data = await response.json();
+      console.log("Audit response:", data);
       if (data.success) {
         setAuditResults(data.analysis);
       }

@@ -1,54 +1,61 @@
 import { useState, useEffect } from 'react';
 import { Wallet, ArrowUpRight, ArrowDownLeft, ExternalLink } from 'lucide-react';
-import { connect, disconnect } from '@starknet-io/get-starknet';
-import { Contract, uint256 } from 'starknet';
+import { useAccount, useConnect, useDisconnect } from "@starknet-react/core";
+import { uint256 } from 'starknet';
 
 // Constants for your deployed setup
 const VAULT_ADDRESS = "0x0683bc21ada95e6c96ef268d5e28851ba6c029a743c97b6a368ec6a191bfae90";
 const STRK_TOKEN_ADDRESS = "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
 
 export default function WalletPage() {
-  const [connection, setConnection] = useState<any>(null);
-  const [address, setAddress] = useState('');
+  const { address, account, isConnected } = useAccount();
+  const { connect, connectors } = useConnect();
+  const { disconnect } = useDisconnect();
+
   const [amount, setAmount] = useState('');
   const [loading, setLoading] = useState(false);
   const [txHash, setTxHash] = useState('');
-  const [wallets, setWallets] = useState<any[]>([]);
-  const [selectedWallet, setSelectedWallet] = useState<any>(null);
+  const [pubKey, setPubKey] = useState('');
 
-  // Fetch available wallets on mount (fallback: use connect to trigger modal)
-  // If you want to show a modal for wallet selection, use connect({ modalMode: "alwaysAsk" })
-  // For now, we clear wallets list and let connect handle wallet selection
+  // Fetch Public Key once account is connected
   useEffect(() => {
-    setWallets([]);
-  }, []);
-
-  const handleConnect = async () => {
-    try {
-      const selected = await connect({ modalMode: "alwaysAsk", modalTheme: "dark" });
-      if (selected) {
-        setConnection(selected);
-        // StarknetWindowObject may not expose address directly; show a warning or set to empty string
-        setAddress('');
-        // Optionally, you can log the selected object to inspect available properties
-        // console.log('Selected wallet:', selected);
+    const getPub = async () => {
+      if (account && !pubKey) {
+        try {
+          // Only call getPubKey if signer exists and is valid
+          if (account.signer && typeof account.signer.getPubKey === 'function') {
+            const pk = await account.signer.getPubKey();
+            // Only set if pk is valid, not zero, and not an error
+            if (pk && pk !== '0' && pk !== undefined && pk !== null && !pk.toString().startsWith('Error')) {
+              setPubKey(pk);
+            } else {
+              // Skip setting pubKey if invalid
+              console.warn("PubKey fetch skipped: invalid or zero private key.");
+            }
+          }
+        } catch (e) {
+          // Only log if error is not the known zero private key error
+          if (!(e instanceof Error) || !e.message?.includes('expected valid private key')) {
+            console.error("PubKey error:", e);
+          } else {
+            console.warn("PubKey fetch skipped: invalid private key.");
+          }
+        }
       }
-    } catch (error) {
-      console.error("Wallet connection failed:", error);
-    }
-  };
+    };
+    getPub();
+  }, [account, pubKey]);
 
   const handleDelegate = async () => {
-    if (!connection || !amount) return;
+    if (!account || !amount) return;
     setLoading(true);
     setTxHash('');
 
     try {
-      // 1. Format the amount to 18 decimals (STRK)
       const amountInWei = uint256.bnToUint256(BigInt(Math.floor(parseFloat(amount) * 10 ** 18)));
 
-      // 2. Multicall: Bundle Approve and Deposit so user signs once
-      const { transaction_hash } = await connection.account.execute([
+      // Multicall: Approve + Deposit
+      const { transaction_hash } = await account.execute([
         {
           contractAddress: STRK_TOKEN_ADDRESS,
           entrypoint: "approve",
@@ -65,18 +72,18 @@ export default function WalletPage() {
       setAmount('');
     } catch (error) {
       console.error("Delegation failed:", error);
-      alert("Transaction failed. Make sure you have enough STRK and gas.");
+      alert("Delegation failed. Check if you are on Sepolia.");
     } finally {
       setLoading(false);
     }
   };
 
   const handleUndelegate = async () => {
-    if (!connection) return;
+    if (!account) return;
     setLoading(true);
 
     try {
-      const { transaction_hash } = await connection.account.execute({
+      const { transaction_hash } = await account.execute({
         contractAddress: VAULT_ADDRESS,
         entrypoint: "reclaim",
         calldata: []
@@ -90,31 +97,46 @@ export default function WalletPage() {
   };
 
   return (
-    <div className="max-w-md mx-auto mt-12 p-8 rounded-2xl glass-effect glass-glow border border-emerald-500/20 bg-emerald-900/10 shadow-2xl flex flex-col items-center space-y-8">
+    <div className="max-w-md mx-auto mt-12 p-8 rounded-2xl glass-effect glass-glow border border-emerald-500/20 bg-emerald-900/10 shadow-2xl flex flex-col items-center space-y-8 text-emerald-50">
       <div className="text-center">
-        <h2 className="text-3xl font-bold text-emerald-300 mb-2">Starknet Vault</h2>
+        <h2 className="text-3xl font-bold text-emerald-300 mb-2">Vault Stake</h2>
         <p className="text-emerald-400/60 text-sm">Lock STRK to start Touching Grass</p>
       </div>
 
-      {!connection ? (
-        <button
-          onClick={handleConnect}
-          className="group relative flex items-center gap-3 px-8 py-4 rounded-xl bg-emerald-500 text-slate-900 font-bold text-lg hover:bg-emerald-400 transition-all active:scale-95 shadow-[0_0_20px_rgba(16,185,129,0.3)]"
-        >
-          <Wallet className="w-6 h-6" />
-          Connect Wallet
-        </button>
+      {!isConnected ? (
+        <div className="flex flex-col gap-3 w-full">
+          {connectors.map((connector) => (
+            <button
+              key={connector.id}
+              onClick={() => connect({ connector })}
+              className="flex items-center justify-center gap-3 px-8 py-4 rounded-xl bg-emerald-500 text-slate-900 font-bold text-lg hover:bg-emerald-400 transition-all active:scale-95 shadow-[0_0_20px_rgba(16,185,129,0.3)]"
+            >
+              <Wallet className="w-6 h-6" />
+              Connect {connector.name}
+            </button>
+          ))}
+        </div>
       ) : (
         <div className="w-full space-y-6">
-          <div className="p-4 rounded-xl bg-slate-900/40 border border-emerald-500/10 flex justify-between items-center">
-            <span className="text-emerald-300/60 text-sm uppercase tracking-wider font-bold">Account</span>
-            <span className="text-emerald-100 font-mono text-sm">
-              {address ? `${address.slice(0, 6)}...${address.slice(-4)}` : '—'}
-            </span>
+          <div className="space-y-3">
+            <div className="p-4 rounded-xl bg-slate-900/40 border border-emerald-500/10 flex justify-between items-center overflow-hidden">
+              <span className="text-emerald-300/60 text-xs uppercase font-bold tracking-widest">Address</span>
+              <span className="text-emerald-100 font-mono text-xs truncate ml-4">
+                {address?.slice(0, 6)}...{address?.slice(-4)}
+              </span>
+            </div>
+            {pubKey && (
+              <div className="p-4 rounded-xl bg-slate-900/40 border border-emerald-500/10 flex justify-between items-center overflow-hidden">
+                <span className="text-emerald-300/60 text-xs uppercase font-bold tracking-widest">PubKey</span>
+                <span className="text-emerald-100 font-mono text-[10px] opacity-60 truncate ml-4 italic">
+                  {pubKey}
+                </span>
+              </div>
+            )}
           </div>
 
           <div className="space-y-2">
-            <label className="text-xs font-bold text-emerald-300/40 uppercase ml-1">Amount (STRK)</label>
+            <label className="text-xs font-bold text-emerald-300/40 uppercase ml-1">Stake Amount (STRK)</label>
             <input
               type="number"
               placeholder="0.00"
@@ -143,16 +165,24 @@ export default function WalletPage() {
             </button>
           </div>
 
-          {txHash && (
-            <a
-              href={`https://sepolia.voyager.online/tx/${txHash}`}
-              target="_blank"
-              rel="noreferrer"
-              className="flex items-center justify-center gap-2 text-emerald-400/80 text-xs hover:text-emerald-300 transition-colors pt-2"
+          <div className="flex flex-col items-center gap-4">
+            {txHash && (
+              <a
+                href={`https://sepolia.voyager.online/tx/${txHash}`}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-2 text-emerald-400/80 text-xs hover:text-emerald-300 transition-colors underline decoration-emerald-500/30"
+              >
+                Track on Voyager <ExternalLink className="w-3 h-3" />
+              </a>
+            )}
+            <button 
+              onClick={() => disconnect()}
+              className="text-xs text-rose-400/50 hover:text-rose-400 font-bold tracking-widest uppercase transition-colors"
             >
-              View on Voyager <ExternalLink className="w-3 h-3" />
-            </a>
-          )}
+              Disconnect Wallet
+            </button>
+          </div>
         </div>
       )}
     </div>

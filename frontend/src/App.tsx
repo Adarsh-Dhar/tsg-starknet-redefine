@@ -1,167 +1,121 @@
-'use client';
+// Error Boundary for React
+import React, { Component } from 'react';
 
-import { useState, useEffect } from 'react'
-import { BrowserRouter as Router, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
-import { AlertCircle,Home, FileText, Trophy, Settings as SettingsIcon, Wallet } from 'lucide-react'
-import Dashboard from './components/Dashboard'
-import GrassReminder from './components/GrassReminder'
-import Settings from './components/Settings'
-import InsightsPage from './InsightsPage'
-import LeaderboardPage from './LeaderboardPage'
-import WalletPage from './WalletPage'
+class ErrorBoundary extends Component<{ children: React.ReactNode }, { hasError: boolean }> {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  componentDidCatch(error: any, info: any) {
+    // Log error if needed
+    console.error('ErrorBoundary caught:', error, info);
+  }
+  render() {
+    if (this.state.hasError) {
+      return <div className="text-red-500 p-8 text-center">Something went wrong. Please reload or contact support.</div>;
+    }
+    return this.props.children;
+  }
+}
+import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
+import { LayoutDashboard, Trophy, Lightbulb, Wallet as WalletIcon } from 'lucide-react';
+import Dashboard from './components/Dashboard';
+import LeaderboardPage from './LeaderboardPage';
+import InsightsPage from './InsightsPage';
+import WalletPage from './WalletPage';
 
-type View = 'dashboard' | 'insights' | 'settings' | 'leaderboard'
+// Starknet React Imports
+import { StarknetConfig, braavos, argent, useInjectedConnectors, voyager } from "@starknet-react/core";
+import { sepolia } from "@starknet-react/chains";
+import { RpcProvider } from "starknet";
 
-function AppRoutes() {
-  const [currentView, setCurrentView] = useState<View>('dashboard');
-  const [screenTime, setScreenTime] = useState(0);
-  const [dailyGoal, setDailyGoal] = useState(180); // 3 hours in minutes
-  const navigate = useNavigate();
+function AppContent() {
   const location = useLocation();
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setScreenTime((prev) => {
-        const newTime = prev + Math.random() * 2;
-        return newTime > dailyGoal ? dailyGoal : newTime;
-      });
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [dailyGoal]);
-
-  const screenTimePercentage = Math.min((screenTime / dailyGoal) * 100, 100);
-  const isExceeded = screenTime > dailyGoal;
-  const breakRequired = screenTime > 0 && screenTime % 30 === 0;
-
-  // Navigation for bottom nav and header
-  const handleNav = (view: View | 'wallet') => {
-    if (view === 'wallet') {
-      navigate('/wallet');
-    } else {
-      setCurrentView(view);
-      if (location.pathname !== '/') navigate('/');
-    }
-  };
-
   return (
-    <div className="min-h-screen w-full bg-gradient-to-br from-slate-950 via-green-950 to-slate-950 flex flex-col">
-      {/* Background decoration */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-green-500/5 rounded-full blur-3xl" />
-        <div className="absolute bottom-0 left-0 w-96 h-96 bg-emerald-500/5 rounded-full blur-3xl" />
-      </div>
-
-      <div className="relative z-10 flex flex-col min-h-screen">
-        {/* Header */}
-        <header className="glass-effect glass-glow px-6 py-4 border-b border-emerald-500/20">
-          <div className="max-w-6xl mx-auto flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-400 to-green-600 flex items-center justify-center text-white font-bold text-lg">
-                🌱
+    <div className="min-h-screen bg-slate-950 text-slate-200 font-sans selection:bg-emerald-500/30">
+      <nav className="border-b border-emerald-500/10 bg-slate-900/50 backdrop-blur-md sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between h-16 items-center">
+            <div className="flex items-center gap-2 group cursor-pointer">
+              <div className="w-8 h-8 bg-gradient-to-br from-emerald-400 to-green-600 rounded-lg flex items-center justify-center shadow-lg shadow-emerald-500/20 group-hover:scale-110 transition-transform">
+                <span className="text-slate-900 font-bold text-xl">G</span>
               </div>
-              <div>
-                <h1 className="text-xl font-bold text-white">Touch Some Grass</h1>
-                <p className="text-xs text-emerald-300/70">Screen Time Monitor</p>
-              </div>
+              <h1 className="text-xl font-bold bg-gradient-to-r from-emerald-400 to-green-500 bg-clip-text text-transparent">
+                Touch Grass
+              </h1>
             </div>
-            <div className="flex items-center gap-2 text-sm">
-              <button
-                aria-label="Settings"
-                className={`p-2 rounded-full hover:bg-emerald-500/10 transition-colors ${currentView === 'settings' ? 'bg-emerald-500/10' : ''}`}
-                onClick={() => handleNav('settings')}
-              >
-                <SettingsIcon className={`w-6 h-6 ${currentView === 'settings' ? 'text-emerald-400' : 'text-emerald-300/70'}`} />
-              </button>
-              <button
-                aria-label="Wallet"
-                className={`p-2 rounded-full hover:bg-emerald-500/10 transition-colors ${location.pathname === '/wallet' ? 'bg-emerald-500/10' : ''}`}
-                onClick={() => handleNav('wallet')}
-              >
-                <Wallet className={`w-6 h-6 ${location.pathname === '/wallet' ? 'text-emerald-400' : 'text-emerald-300/70'}`} />
-              </button>
-            </div>
-          </div>
-        </header>
-
-        {/* Main Content */}
-        <main className="flex-1 overflow-y-auto pb-24">
-          <div className="max-w-6xl mx-auto px-4 md:px-6 py-8 space-y-6">
-            <Routes>
-              <Route
-                path="/"
-                element={
-                  <>
-                    {/* Alert Section */}
-                    {isExceeded && (
-                      <div className="glass-effect glass-glow p-4 rounded-xl border border-red-500/30 bg-gradient-to-r from-red-500/10 to-red-500/5 flex items-start gap-3">
-                        <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
-                        <div>
-                          <h3 className="font-semibold text-red-300 mb-1">Daily Goal Exceeded</h3>
-                          <p className="text-sm text-red-200/80">
-                            You've exceeded your daily screen time goal. Time to take a break and touch some grass!
-                          </p>
-                        </div>
-                      </div>
-                    )}
-                    {breakRequired && screenTime > 0 && <GrassReminder screenTime={screenTime} />}
-                    {/* Content Views */}
-                    {currentView === 'dashboard' && (
-                      <Dashboard screenTime={screenTime} dailyGoal={dailyGoal} percentage={screenTimePercentage} />
-                    )}
-                    {currentView === 'insights' && (
-                      <InsightsPage screenTime={screenTime} dailyGoal={dailyGoal} />
-                    )}
-                    {currentView === 'leaderboard' && <LeaderboardPage />}
-                    {currentView === 'settings' && <Settings dailyGoal={dailyGoal} onGoalChange={setDailyGoal} />}
-                  </>
-                }
-              />
-              <Route path="/wallet" element={<WalletPage />} />
-            </Routes>
-          </div>
-        </main>
-      </div>
-
-      {/* Mobile Bottom Navigation */}
-      {location.pathname === '/' && (
-        <nav className="glass-effect glass-glow border-t border-emerald-500/20 fixed bottom-0 left-0 right-0 max-w-6xl mx-auto w-full z-20">
-          <div className="flex items-center justify-around md:justify-center md:gap-8">
-            {[
-              { id: 'dashboard' as const, icon: Home, label: 'Home' },
-              { id: 'insights' as const, icon: FileText, label: 'Insights' },
-              { id: 'leaderboard' as const, icon: Trophy, label: 'Leaderboard' },
-            ].map(({ id, icon: Icon, label }) => (
-              <button
-                key={id}
-                onClick={() => handleNav(id)}
-                className={`flex flex-col items-center justify-center gap-1 px-4 py-3 flex-1 transition-all duration-200 text-center ${
-                  currentView === id
-                    ? 'bg-gradient-to-t from-emerald-400/20 to-emerald-500/10'
-                    : 'hover:bg-emerald-500/5'
-                }`}
-                style={{ minWidth: 0 }}
-              >
-                <Icon className={`w-7 h-7 transition-colors ${currentView === id ? 'text-emerald-400' : 'text-emerald-300/60'}`} />
-                <span
-                  className={`text-xs font-medium transition-colors ${
-                    currentView === id ? 'text-emerald-400' : 'text-emerald-300/60'
+            
+            <div className="hidden md:flex items-center space-x-1">
+              {[
+                { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
+                { path: '/leaderboard', icon: Trophy, label: 'Leaderboard' },
+                { path: '/insights', icon: Lightbulb, label: 'Insights' },
+                { path: '/wallet', icon: WalletIcon, label: 'Wallet' },
+              ].map(({ path, icon: Icon, label }) => (
+                <Link
+                  key={path}
+                  to={path}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-200 ${
+                    location.pathname === path
+                      ? 'bg-emerald-500/10 text-emerald-400 shadow-[inset_0_0_12px_rgba(16,185,129,0.1)]'
+                      : 'text-slate-400 hover:text-emerald-300 hover:bg-slate-800/50'
                   }`}
                 >
-                  {label}
-                </span>
-              </button>
-            ))}
+                  <Icon className={`w-4 h-4 ${location.pathname === path ? 'animate-pulse' : ''}`} />
+                  <span className="font-medium text-sm">{label}</span>
+                </Link>
+              ))}
+            </div>
           </div>
-        </nav>
-      )}
+        </div>
+      </nav>
+
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+        <Routes>
+          <Route path="/" element={<Dashboard screenTime={0} dailyGoal={0} percentage={0} />} />
+          <Route path="/leaderboard" element={<LeaderboardPage />} />
+          <Route path="/insights" element={<InsightsPage screenTime={0} dailyGoal={0} />} />
+          <Route path="/wallet" element={<WalletPage />} />
+        </Routes>
+      </main>
     </div>
   );
 }
 
 export default function App() {
+  // Set up Sepolia Provider (Alchemy RPC)
+  // Provider factory for Sepolia
+  const providerFactory = (chain: { id: bigint; }) => {
+    if (chain.id === sepolia.id) {
+      return new RpcProvider({
+        nodeUrl: "https://starknet-sepolia.g.alchemy.com/v2/ttO_pNTAABnXF_9T1g7sSRQfRN1wbcip"
+      });
+    }
+    return null;
+  };
+
+  // Configure connectors (Braavos, Argent X, Injected)
+  const connectors = [
+    braavos(),
+    argent(),
+  ];
+
   return (
-    <Router>
-      <AppRoutes />
-    </Router>
+    <ErrorBoundary>
+      <StarknetConfig
+        chains={[sepolia]}
+        provider={providerFactory}
+        connectors={connectors}
+        explorer={voyager}
+      >
+        <Router>
+          <AppContent />
+        </Router>
+      </StarknetConfig>
+    </ErrorBoundary>
   );
 }

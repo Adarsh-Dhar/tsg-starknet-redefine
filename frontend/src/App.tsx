@@ -26,6 +26,7 @@ import Dashboard from './components/Dashboard';
 import LeaderboardPage from './LeaderboardPage';
 import InsightsPage from './InsightsPage';
 import WalletPage from './WalletPage';
+import DataPage from './DataPage';
 
 // Starknet React Imports
 import { StarknetConfig, braavos, argent, useInjectedConnectors, voyager } from "@starknet-react/core";
@@ -55,6 +56,7 @@ function AppContent() {
                 { path: '/leaderboard', icon: Trophy, label: 'Leaderboard' },
                 { path: '/insights', icon: Lightbulb, label: 'Insights' },
                 { path: '/wallet', icon: WalletIcon, label: 'Wallet' },
+                { path: '/data', icon: Database, label: 'Data' },
               ].map(({ path, icon: Icon, label }) => (
                 <Link
                   key={path}
@@ -80,6 +82,7 @@ function AppContent() {
           <Route path="/leaderboard" element={<LeaderboardPage />} />
           <Route path="/insights" element={<InsightsPage screenTime={0} dailyGoal={0} />} />
           <Route path="/wallet" element={<WalletPage />} />
+          <Route path="/data" element={<DataPage />} />
         </Routes>
       </main>
     </div>

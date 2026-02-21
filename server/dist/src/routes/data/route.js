@@ -3,16 +3,14 @@ import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import axios from 'axios';
 import multer from 'multer';
-import fs from 'fs';
-import { chain } from 'stream-chain';
 import streamJsonPkg from 'stream-json';
 const { parser } = streamJsonPkg;
 import streamArrayPkg from 'stream-json/streamers/StreamArray.js';
 const { streamArray } = streamArrayPkg;
-// Internal imports
+// Internal imports leveraging local project architecture
 import { redis } from '../../redisClient.js';
-import { verifySignature } from '../../lib/verifySignature.js'; // Ensure this utility exists
-import { slashQueue } from '../../lib/queues.js'; // Ensure BullMQ/Bee-Queue is configured
+import { verifySignature } from '../../lib/verifySignature.js';
+import { slashQueue } from '../../lib/queues.js';
 const router = Router();
 const upload = multer({ dest: 'uploads/' });
 // --- CONFIGURATION & SCHEMAS ---
@@ -20,12 +18,12 @@ const SESSION_KEY_PREFIX = 'brainrot:session:';
 const BASELINE_KEY_PREFIX = 'brainrot:baseline:';
 const SESSION_WINDOW = 10;
 const PHENOTYPE_CONFIG = {
-    ZOMBIE_VARIANCE_THRESHOLD: 15,
-    DOOM_VELOCITY_TRIGGER: 3.5,
-    RBP_START_HOUR: 22,
-    SESSION_GAP_SECONDS: 1200,
+    ZOMBIE_VARIANCE_THRESHOLD: 15, //
+    DOOM_VELOCITY_TRIGGER: 3.5, //
+    RBP_START_HOUR: 22, //
+    SESSION_GAP_SECONDS: 1200, //
 };
-// Rate Limiter: 30 requests per minute per IP
+// Rate Limiter: Protects ingestion endpoints
 export const dataRateLimiter = rateLimit({
     windowMs: 60 * 1000,
     max: 30,
@@ -37,7 +35,7 @@ export const dataRateLimiter = rateLimit({
 const IngestRealtimeSchema = z.object({
     walletAddress: z.string().regex(/^([a-z0-9:]{10,})$/i, "Invalid wallet address format"),
     videoId: z.string().min(3),
-    duration: z.number().int().positive().max(3600), // Max 1 hour per video
+    duration: z.number().int().positive().max(3600),
     signature: z.string().min(64),
     message: z.string().min(1),
 });
@@ -49,7 +47,7 @@ async function getUserSession(walletAddress) {
     return JSON.parse(raw);
 }
 async function setUserSession(walletAddress, session) {
-    await redis.set(SESSION_KEY_PREFIX + walletAddress, JSON.stringify(session), { EX: 86400 }); // 24h TTL
+    await redis.set(SESSION_KEY_PREFIX + walletAddress, JSON.stringify(session), { EX: 86400 });
 }
 function calculateVariance(numbers) {
     if (numbers.length < 2)
@@ -60,22 +58,18 @@ function calculateVariance(numbers) {
 // --- ROUTES ---
 /**
  * @route POST /api/data/ingest/realtime
- * @desc Production-level real-time ingestion with signature verification and async slashing
+ * @desc Real-time ingestion with cryptographic verification
  */
 router.post('/ingest/realtime', dataRateLimiter, async (req, res) => {
-    // 1. Validate Input
     const parseResult = IngestRealtimeSchema.safeParse(req.body);
     if (!parseResult.success) {
         return res.status(400).json({ error: 'Invalid input', details: parseResult.error.issues });
     }
     const { walletAddress, videoId, duration, signature, message } = parseResult.data;
     try {
-        // 2. Cryptographic Security: Verify that the user actually owns the wallet
         const isOwner = await verifySignature(message, signature, walletAddress);
-        if (!isOwner) {
+        if (!isOwner)
             return res.status(401).json({ error: 'Unauthorized: Invalid signature' });
-        }
-        // 3. Session Management
         const session = await getUserSession(walletAddress);
         const now = Date.now();
         session.dwells.push(duration);
@@ -84,9 +78,8 @@ router.post('/ingest/realtime', dataRateLimiter, async (req, res) => {
             session.dwells.shift();
         if (session.lastTimestamps.length > SESSION_WINDOW)
             session.lastTimestamps.shift();
-        // 4. Scoring Engine
         let scoreDelta = 0;
-        // A. Personalized Baseline Variance (Zombie Mode)
+        // A. Variance Scoring (Zombie Mode)
         let baselineVariance = PHENOTYPE_CONFIG.ZOMBIE_VARIANCE_THRESHOLD;
         const baselineKey = BASELINE_KEY_PREFIX + walletAddress;
         const storedBaseline = await redis.get(baselineKey);
@@ -95,21 +88,19 @@ router.post('/ingest/realtime', dataRateLimiter, async (req, res) => {
         }
         else if (session.dwells.length >= 10) {
             baselineVariance = calculateVariance(session.dwells);
-            await redis.set(baselineKey, baselineVariance.toString(), { EX: 604800 }); // 1 week TTL
+            await redis.set(baselineKey, baselineVariance.toString(), { EX: 604800 });
         }
         const currentVariance = calculateVariance(session.dwells);
-        if (session.dwells.length >= 5 && currentVariance < baselineVariance) {
+        if (session.dwells.length >= 5 && currentVariance < baselineVariance)
             scoreDelta += 10;
-        }
         // B. Doomscrolling Velocity
         if (session.lastTimestamps.length >= 2) {
             const windowMs = session.lastTimestamps[session.lastTimestamps.length - 1] - session.lastTimestamps[0];
             const velocity = session.dwells.length / (windowMs / 60000);
-            if (velocity > PHENOTYPE_CONFIG.DOOM_VELOCITY_TRIGGER) {
+            if (velocity > PHENOTYPE_CONFIG.DOOM_VELOCITY_TRIGGER)
                 scoreDelta += 15;
-            }
         }
-        // C. Content Classification (YouTube API with Regex Fallback)
+        // C. Content Classification using YT_API_KEY from .env
         let category = 'unknown';
         const ytApiKey = process.env.YT_API_KEY;
         try {
@@ -123,59 +114,38 @@ router.post('/ingest/realtime', dataRateLimiter, async (req, res) => {
                 if (["27", "28"].includes(category))
                     scoreDelta -= 10; // High-value content
             }
-            else {
-                throw new Error('No API Key');
-            }
         }
         catch (apiError) {
-            // Robust Fallback: Regex matching on video tags/ID if API fails
             if (/edu|learn|science|math|study|tech/i.test(videoId))
                 scoreDelta -= 5;
-            else if (/fun|lol|meme|prank/i.test(videoId))
-                scoreDelta += 5;
         }
-        // D. Late Night Multiplier (RBP)
+        // D. Late Night Multiplier
         const hour = new Date(now).getHours();
-        if (hour >= PHENOTYPE_CONFIG.RBP_START_HOUR || hour < 5) {
+        if (hour >= PHENOTYPE_CONFIG.RBP_START_HOUR || hour < 5)
             scoreDelta *= 3;
-        }
-        // 5. Enforcement & Persistence
         session.score += scoreDelta;
         session.lastUpdate = now;
         let slashed = false;
         if (session.score >= 100) {
-            // Async Slashing: Don't wait for blockchain. Offload to BullMQ worker.
-            await slashQueue.add('execute-penalty', {
-                walletAddress,
-                reason: 'Threshold Exceeded',
-                score: session.score
-            });
+            await slashQueue.add('execute-penalty', { walletAddress, score: session.score });
             session.score = 0;
             slashed = true;
         }
         await setUserSession(walletAddress, session);
-        return res.json({
-            success: true,
-            score: session.score,
-            slashed,
-            category,
-            message: slashed ? "Penalty enqueued for processing." : "Score updated."
-        });
+        return res.json({ success: true, score: session.score, slashed, category });
     }
     catch (error) {
-        console.error('Real-time ingestion error:', error);
         return res.status(500).json({ error: 'Internal server error' });
     }
 });
 /**
  * @route POST /api/data/audit/advanced
- * @desc Historical analysis for batch uploads (Google Takeout)
+ * @desc Historical analysis for batch uploads
  */
 router.post('/audit/advanced', async (req, res) => {
     const { historyData } = req.body;
-    if (!historyData || !Array.isArray(historyData)) {
-        return res.status(400).json({ error: 'Invalid history data format' });
-    }
+    if (!historyData || !Array.isArray(historyData))
+        return res.status(400).json({ error: 'Invalid data' });
     const sorted = [...historyData].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
     const sessions = [];
     let currentSession = [];
@@ -187,51 +157,14 @@ router.post('/audit/advanced', async (req, res) => {
         if (!next || dwell > PHENOTYPE_CONFIG.SESSION_GAP_SECONDS) {
             if (currentSession.length > 3) {
                 const dwells = currentSession.map(v => v.dwell).filter(d => d > 0 && d < 3600);
-                const variance = calculateVariance(dwells);
-                const velocity = currentSession.length / ((dwells.reduce((a, b) => a + b, 0) / 60) || 1);
                 sessions.push({
                     startTime: currentSession[0].timestamp,
-                    videoCount: currentSession.length,
-                    metrics: { variance, velocity },
-                    isPathological: velocity > PHENOTYPE_CONFIG.DOOM_VELOCITY_TRIGGER
+                    isPathological: (currentSession.length / ((dwells.reduce((a, b) => a + b, 0) / 60) || 1)) > PHENOTYPE_CONFIG.DOOM_VELOCITY_TRIGGER
                 });
             }
             currentSession = [];
         }
     }
     res.json({ success: true, analysis: sessions });
-});
-/**
- * @route POST /api/data/ingest
- * @desc Stream-based processing for large JSON uploads
- */
-router.post('/ingest', upload.single('history_file'), async (req, res) => {
-    if (!req.file)
-        return res.status(400).json({ error: 'No file provided' });
-    const results = [];
-    const pipeline = chain([
-        fs.createReadStream(req.file.path),
-        parser(),
-        streamArray(),
-        (data) => {
-            const item = data.value;
-            const videoId = item.titleUrl?.match(/v=([^&]+)/)?.[1];
-            return videoId ? {
-                videoId,
-                title: item.title?.replace('Watched ', ''),
-                timestamp: item.time
-            } : null;
-        }
-    ]);
-    pipeline.on('data', (d) => results.push(d));
-    pipeline.on('end', () => {
-        fs.unlinkSync(req.file.path);
-        res.json({ total: results.length, preview: results.slice(0, 5) });
-    });
-    pipeline.on('error', (err) => {
-        if (fs.existsSync(req.file.path))
-            fs.unlinkSync(req.file.path);
-        res.status(500).json({ error: err.message });
-    });
 });
 export default router;

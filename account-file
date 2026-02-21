@@ -1,0 +1,26 @@
+{
+  "sepolia": {
+    "mainuser": {
+      "address": "0x4a05d15f240be02f13ef2e09349a668f2faa7942cbde11008b737111c9351f3",
+      "class_hash": "0x5b4b537eaa2399e3aa99c4e2e0208ebd6c71bc1467938cd52c798c601e43564",
+      "deployed": true,
+      "legacy": false,
+      "private_key": "0x25baeea1b44be5f61c7f0f9cec53947959583023a03ef096d77a4495492818",
+      "public_key": "0x57cf22eb72fca52d603e481a0b88410440afd3dbd4a3d259150bdac24372a23",
+      "salt": "0x5dbd55b9b6787114",
+      "type": "open_zeppelin"
+    }
+  },
+  "alpha-sepolia": {
+    "mainuser": {
+      "address": "0x4a05d15f240be02f13ef2e09349a668f2faa7942cbde11008b737111c9351f3",
+      "class_hash": "0x5b4b537eaa2399e3aa99c4e2e0208ebd6c71bc1467938cd52c798c601e43564",
+      "deployed": true,
+      "legacy": false,
+      "private_key": "0x25baeea1b44be5f61c7f0f9cec53947959583023a03ef096d77a4495492818",
+      "public_key": "0x57cf22eb72fca52d603e481a0b88410440afd3dbd4a3d259150bdac24372a23",
+      "salt": "0x5dbd55b9b6787114",
+      "type": "open_zeppelin"
+    }
+  }
+}

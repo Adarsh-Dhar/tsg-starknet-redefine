@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
+import { GRAVITY_VAULT_ABI } from './abi';
 import { Wallet, ArrowUpRight, ArrowDownLeft, ExternalLink } from 'lucide-react';
 import { useAccount, useConnect, useDisconnect } from "@starknet-react/core";
 import { uint256 } from 'starknet';
 
 // Constants for your deployed setup
-const VAULT_ADDRESS = "0x0683bc21ada95e6c96ef268d5e28851ba6c029a743c97b6a368ec6a191bfae90";
+const VAULT_ADDRESS = "0x4a05d15f240be02f13ef2e09349a668f2faa7942cbde11008b737111c9351f3";
 const STRK_TOKEN_ADDRESS = "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
 
 export default function WalletPage() {
@@ -79,16 +80,20 @@ export default function WalletPage() {
   };
 
   const handleUndelegate = async () => {
-    if (!account) return;
+    if (!account || !amount) return;
     setLoading(true);
 
     try {
-      const { transaction_hash } = await account.execute({
-        contractAddress: VAULT_ADDRESS,
-        entrypoint: "reclaim",
-        calldata: []
-      });
+      const amountInWei = uint256.bnToUint256(BigInt(Math.floor(parseFloat(amount) * 10 ** 18)));
+      const { transaction_hash } = await account.execute([
+        {
+          contractAddress: VAULT_ADDRESS,
+          entrypoint: "reclaim",
+          calldata: [amountInWei.low, amountInWei.high]
+        }
+      ]);
       setTxHash(transaction_hash);
+      setAmount('');
     } catch (error) {
       console.error("Undelegate failed:", error);
     } finally {
@@ -157,7 +162,7 @@ export default function WalletPage() {
             </button>
             <button
               onClick={handleUndelegate}
-              disabled={loading}
+              disabled={loading || !amount}
               className="flex items-center justify-center gap-2 py-4 rounded-xl bg-slate-800 text-emerald-400 font-bold border border-emerald-500/20 hover:bg-slate-700 transition-all"
             >
               <ArrowDownLeft className="w-5 h-5" />

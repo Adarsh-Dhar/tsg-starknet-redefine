@@ -1,8 +1,8 @@
 #[starknet::interface]
 pub trait IGravityVault<TContractState> {
     fn deposit(ref self: TContractState, amount: u256);
-    fn slash(ref self: TContractState, user: starknet::ContractAddress);
-    fn reclaim(ref self: TContractState);
+    fn slash(ref self: TContractState, user: starknet::ContractAddress, amount: u256);
+    fn reclaim(ref self: TContractState, amount: u256);
     fn get_balance(self: @TContractState, account: starknet::ContractAddress) -> u256;
 }
 
@@ -37,6 +37,7 @@ mod GravityVault {
 
     #[abi(embed_v0)]
     impl GravityVaultImpl of super::IGravityVault<ContractState> {
+
         fn deposit(ref self: ContractState, amount: u256) {
             let caller = get_caller_address();
             let token = IERC20Dispatcher { contract_address: self.token_address.read() };
@@ -45,22 +46,21 @@ mod GravityVault {
             self.balances.write(caller, current_bal + amount);
         }
 
-        fn slash(ref self: ContractState, user: ContractAddress) {
+        fn slash(ref self: ContractState, user: ContractAddress, amount: u256) {
             assert(get_caller_address() == self.delegate.read(), 'NOT_AUTHORIZED_DELEGATE');
-            let penalty: u256 = 5000;
             let user_bal = self.balances.read(user);
-            assert(user_bal >= penalty, 'INSUFFICIENT_FUNDS');
-            self.balances.write(user, user_bal - penalty);
+            assert(user_bal >= amount, 'INSUFFICIENT_FUNDS');
+            self.balances.write(user, user_bal - amount);
             let token = IERC20Dispatcher { contract_address: self.token_address.read() };
-            token.transfer(self.delegate.read(), penalty);
+            token.transfer(self.delegate.read(), amount);
         }
 
-        fn reclaim(ref self: ContractState) {
+        fn reclaim(ref self: ContractState, amount: u256) {
             let caller = get_caller_address();
-            // Allow ANY user to reclaim their OWN funds
-            let amount = self.balances.read(caller);
+            let user_bal = self.balances.read(caller);
             assert(amount > 0, 'NO_FUNDS_TO_RECLAIM');
-            self.balances.write(caller, 0);
+            assert(user_bal >= amount, 'INSUFFICIENT_FUNDS');
+            self.balances.write(caller, user_bal - amount);
             let token = IERC20Dispatcher { contract_address: self.token_address.read() };
             token.transfer(caller, amount);
         }

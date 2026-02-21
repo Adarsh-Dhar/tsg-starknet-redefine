@@ -1,0 +1,3 @@
+WIF: cUQwTZT55kvPfb7pTLFxgWUbQh32Xfq1xA4hoVJDSS813opfiJ5M
+Address: bchtest:qrzs6fc22wpy8q9afj9k6ey9pr570fvyrc73l7adsp
+Public Key: 02a6d79bfa11986e429e68312aa1ce991632b56196e1a8daf33ba991793ae4a163

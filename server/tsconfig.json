@@ -4,8 +4,10 @@
     "outDir": "./dist",       // Compiled files go here
     "target": "ES2020",       // Or your preferred JS version
     "module": "NodeNext",     // Or CommonJS depending on your environment
+    "moduleResolution": "NodeNext",
     "esModuleInterop": true,  // For better module compatibility
-    "skipLibCheck": true      // Speeds up compilation
+    "skipLibCheck": true,
+    "noEmit": false           // Ensure this is false so files actually generate
   },
   "include": ["src/**/*"]     // Only compile files in /src
 }

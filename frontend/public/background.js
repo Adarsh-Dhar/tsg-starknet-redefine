@@ -1,6 +1,5 @@
 // Background Service Worker for Touch Some Grass Extension
 
-const chrome = window.chrome; // Declare the chrome variable
 
 const STORAGE_KEYS = {
   DAILY_GOAL: 'dailyGoal',

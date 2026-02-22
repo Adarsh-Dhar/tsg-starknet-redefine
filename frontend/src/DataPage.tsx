@@ -134,7 +134,7 @@ export default function DataPage() {
           <h2 className="text-xl font-bold flex items-center gap-2 mb-6">
             <Activity className="text-emerald-400" /> Detection Thresholds
           </h2>
-          <div className="h-64 w-full">
+          <div style={{ height: '300px', width: '100%' }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={configMetrics}>
                 <XAxis dataKey="name" stroke="#10b981" fontSize={12} />

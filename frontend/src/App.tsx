@@ -20,7 +20,7 @@ class ErrorBoundary extends Component<{ children: React.ReactNode }, { hasError:
     return this.props.children;
   }
 }
-import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { LayoutDashboard, Trophy, Lightbulb, Wallet as WalletIcon, DatabaseIcon } from 'lucide-react';
 import Dashboard from './components/Dashboard';
 import LeaderboardPage from './LeaderboardPage';
@@ -115,7 +115,7 @@ export default function App() {
         connectors={connectors}
         explorer={voyager}
       >
-        <Router>
+        <Router basename="./">
           <AppContent />
         </Router>
       </StarknetConfig>

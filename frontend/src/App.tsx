@@ -37,7 +37,7 @@ function AppContent() {
   const location = useLocation();
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-200 font-sans selection:bg-emerald-500/30">
+    <div className="h-full bg-slate-950 text-slate-200 font-sans selection:bg-emerald-500/30">
       <nav className="border-b border-emerald-500/10 bg-slate-900/50 backdrop-blur-md sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16 items-center">
@@ -115,7 +115,7 @@ export default function App() {
         connectors={connectors}
         explorer={voyager}
       >
-        <Router basename="./">
+        <Router>
           <AppContent />
         </Router>
       </StarknetConfig>

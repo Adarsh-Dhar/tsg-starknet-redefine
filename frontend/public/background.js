@@ -20,11 +20,41 @@ chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => 
     return true; // Keep channel open for async response
   }
 });
+
 // Listen for messages from the web DApp (localhost:5173)
 // This allows the side panel to open when the user clicks the extension icon
 chrome.sidePanel
   .setPanelBehavior({ openPanelOnActionClick: true })
   .catch((error) => console.error(error));
+
+// --- YOUTUBE SHORTS ACTIVITY RELAY ---
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === "YOUTUBE_ACTIVITY") {
+    chrome.storage.local.get(['starknet_address'], async (res) => {
+      if (!res.starknet_address) return;
+      try {
+        const response = await fetch('http://localhost:3001/api/data/activity', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            durationSeconds: message.duration,
+            address: res.starknet_address
+          })
+        });
+        const data = await response.json();
+        // Save the new real-time values to storage
+        chrome.storage.local.set({
+          realtime_stats: data.stats
+        }, () => {
+          // Tell Sidebar to update its view
+          chrome.runtime.sendMessage({ type: "UI_REFRESH" });
+        });
+      } catch (err) {
+        console.error("Failed to sync activity to server:", err);
+      }
+    });
+  }
+});
 
 
 chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => {

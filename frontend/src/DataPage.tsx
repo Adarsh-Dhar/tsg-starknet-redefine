@@ -134,8 +134,8 @@ export default function DataPage() {
           <h2 className="text-xl font-bold flex items-center gap-2 mb-6">
             <Activity className="text-emerald-400" /> Detection Thresholds
           </h2>
-          <div style={{ height: '300px', width: '100%' }}>
-            <ResponsiveContainer width="100%" height="100%">
+          <div style={{ height: '300px', width: '100%', minWidth: 200, minHeight: 200 }}>
+            <ResponsiveContainer width="100%" height={300} minWidth={200} minHeight={200}>
               <BarChart data={configMetrics}>
                 <XAxis dataKey="name" stroke="#10b981" fontSize={12} />
                 <YAxis hide />

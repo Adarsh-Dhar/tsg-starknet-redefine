@@ -3,8 +3,14 @@
   "name": "Touch Some Grass",
   "version": "1.0.0",
   "description": "A screen time monitor extension that encourages healthy digital habits and outdoor time",
-  "permissions": ["storage", "sidePanel", "activeTab", "scripting", "tabs"],
-  "host_permissions": ["<all_urls>"],
+  "permissions": ["storage", "sidePanel", "tabs", "activeTab"],
+  "host_permissions": ["https://www.youtube.com/*"],
+    "content_scripts": [
+      {
+        "matches": ["https://www.youtube.com/*"],
+        "js": ["content.js"]
+      }
+    ],
   "action": {
     "default_icon": {
       "16": "icons/icon-16.png",

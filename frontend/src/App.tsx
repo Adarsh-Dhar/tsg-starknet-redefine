@@ -46,20 +46,35 @@ class ErrorBoundary extends Component<{ children: React.ReactNode }, { hasError:
   }
 }
 
+
 function AppContent() {
   const location = useLocation();
   const [syncAddress, setSyncAddress] = useState<string | null>(null);
   const [txStatus, setTxStatus] = useState<string | null>(null);
+  const [stats, setStats] = useState({ screenTime: 0, percentage: 0 });
 
   // Function to pull data from storage without refreshing the whole app
   const loadData = () => {
     if (typeof chrome !== 'undefined' && chrome.storage?.local) {
       chrome.storage.local.get(['starknet_address'], (res) => {
         if (typeof res.starknet_address === 'string' && res.starknet_address.length > 0) {
-          console.log("App: Synced address found:", res.starknet_address);
           setSyncAddress(res.starknet_address);
         } else {
           setSyncAddress(null);
+        }
+      });
+    }
+  };
+
+  // Load real-time stats from storage
+  const loadRealtimeStats = () => {
+    if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+      chrome.storage.local.get(['realtime_stats'], (res) => {
+        if (res.realtime_stats) {
+          setStats({
+            screenTime: Math.round(res.realtime_stats as any),
+            percentage: Math.min(100, (res.realtime_stats as any / 180) * 100)
+          });
         }
       });
     }
@@ -70,11 +85,13 @@ function AppContent() {
     if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
       const listener = (msg: any) => {
         if (msg.type === "UI_REFRESH") {
-          loadData(); // Update local state immediately
+          loadData();
+          loadRealtimeStats(); // Pull newest YT data
         }
       };
       chrome.runtime.onMessage.addListener(listener);
       loadData(); // Initial check
+      loadRealtimeStats(); // Initial stats
       return () => chrome.runtime.onMessage.removeListener(listener);
     }
   }, []);
@@ -134,9 +151,9 @@ function AppContent() {
 
       <main className="max-w-7xl mx-auto px-4 py-6">
         <Routes>
-          <Route path="/" element={<Dashboard syncAddress={syncAddress} screenTime={120} dailyGoal={180} percentage={66} />} />
+          <Route path="/" element={<Dashboard syncAddress={syncAddress} screenTime={stats.screenTime} dailyGoal={180} percentage={stats.percentage} />} />
           <Route path="/leaderboard" element={<LeaderboardPage />} />
-          <Route path="/insights" element={<InsightsPage screenTime={120} dailyGoal={180} />} />
+          <Route path="/insights" element={<InsightsPage screenTime={stats.screenTime} dailyGoal={180} />} />
           <Route path="/wallet" element={<WalletPage />} />
           <Route path="/data" element={<DataPage />} />
         </Routes>

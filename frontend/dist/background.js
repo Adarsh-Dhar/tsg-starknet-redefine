@@ -1,4 +1,9 @@
 // Listen for messages from the web DApp (localhost:5173)
+// This allows the side panel to open when the user clicks the extension icon
+chrome.sidePanel
+  .setPanelBehavior({ openPanelOnActionClick: true })
+  .catch((error) => console.error(error));
+
 chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => {
   if (request.type === "WALLET_SYNC") {
     chrome.storage.local.set({

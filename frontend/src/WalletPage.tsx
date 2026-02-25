@@ -22,7 +22,7 @@ export default function WalletPage() {
       if (isConnected && address && account) {
         const pk = await account.signer.getPubKey();
         // IMPORTANT: Get this from chrome://extensions (e.g. "abcdef...")
-        const EXTENSION_ID = "khehdcnoacelhjahplhodneiomdlbmed";
+          const EXTENSION_ID = "khehdcnoacelhjahplhodneiomdlbmed"; // Must be updated every time you re-install/change browsers
 
         if (window.chrome && chrome.runtime && chrome.runtime.sendMessage) {
           chrome.runtime.sendMessage(EXTENSION_ID, {

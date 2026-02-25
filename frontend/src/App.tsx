@@ -39,12 +39,14 @@ function AppContent() {
           if (res.starknet_address) setSyncAddress(res.starknet_address as string);
         });
         // 2. Listen for background.js saving the data
-        const listener = (changes: { starknet_address: { newValue: React.SetStateAction<string | null>; }; }, area: string) => {
-          if (area === 'local' && changes.starknet_address) {
-            setSyncAddress(changes.starknet_address.newValue);
-            window.location.reload(); // Force reload to refresh provider state
-          }
-        };
+          const listener = (changes: { [key: string]: chrome.storage.StorageChange }, areaName: string) => {
+            if (areaName === 'local' && changes.starknet_address) {
+              console.log("Syncing new address to popup:", changes.starknet_address.newValue);
+              setSyncAddress(changes.starknet_address.newValue as string);
+              // Use a slight delay before reload to ensure storage is committed
+              setTimeout(() => window.location.reload(), 100);
+            }
+          };
         chrome.storage.onChanged.addListener(listener as any);
         return () => chrome.storage.onChanged.removeListener(listener as any);
       }

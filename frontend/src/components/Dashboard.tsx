@@ -34,7 +34,7 @@ export default function Dashboard({ screenTime, dailyGoal, percentage }: Dashboa
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-[400px] mx-auto">
       <div className="glass-effect rounded-2xl p-8 flex flex-col items-center border border-emerald-500/10">
         <div className="text-4xl font-bold text-white mb-1">{Math.round(percentage)}%</div>
         <div className="text-xs font-bold uppercase text-emerald-300/40">Daily Cap</div>

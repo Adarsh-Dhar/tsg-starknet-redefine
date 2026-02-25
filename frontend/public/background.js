@@ -1,3 +1,18 @@
+chrome.runtime.onMessageExternal.addListener(
+  (request, sender, sendResponse) => {
+    if (request.type === "WALLET_CONNECTED") {
+      // Save to storage so the popup can see it
+      chrome.storage.local.set({
+        starknet_address: request.address,
+        starknet_pubkey: request.pubKey,
+        is_connected: true
+      }, () => {
+        sendResponse({ success: true });
+      });
+      return true; // Keep channel open
+    }
+  }
+);
 // Background Service Worker for Touch Some Grass Extension
 
 

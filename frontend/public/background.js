@@ -59,40 +59,32 @@ chrome.sidePanel
 // --- YOUTUBE SHORTS ACTIVITY RELAY ---
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "YOUTUBE_ACTIVITY") {
-    chrome.storage.local.get(['starknet_address'], async (res) => {
-      if (!res.starknet_address) return;
-      try {
-        const response = await fetch('http://localhost:3001/api/data/activity', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            durationSeconds: message.duration,
-            address: res.starknet_address
-          })
-        });
-          if (!response.ok) throw new Error(`Server returned ${response.status}`);
-          const data = await response.json();
-          // Ensure you are saving data.stats (the object)
-          chrome.storage.local.set({ realtime_stats: data.stats }, () => {
-            chrome.runtime.sendMessage({ type: "UI_REFRESH" });
+    chrome.storage.local.get(['starknet_address', 'screenTime'], async (res) => {
+      // 1. Always update local backup first
+      const currentLocal = res.screenTime || 0;
+      const newLocal = currentLocal + (message.duration / 60);
+      chrome.storage.local.set({ screenTime: newLocal });
+      // 2. Attempt server sync if address exists
+      if (res.starknet_address) {
+        try {
+          const response = await fetch('http://localhost:3333/api/data/activity', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              durationSeconds: message.duration,
+              address: res.starknet_address
+            })
           });
-      } catch (err) {
-          console.error("❌ Network Error:", err.message);
+          const data = await response.json();
+          if (data.success) {
+            chrome.storage.local.set({ realtime_stats: data.stats });
+          }
+        } catch (err) {
+          console.error("❌ Server Sync Failed:", err.message);
+        }
       }
-    });
-  }
-});
-
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.type === "YOUTUBE_ACTIVITY") {
-    chrome.storage.local.get(['screenTime'], (res) => {
-      const currentMinutes = res.screenTime || 0;
-      const addedMinutes = message.duration / 60;
-      chrome.storage.local.set({
-        screenTime: currentMinutes + addedMinutes
-      }, () => {
-        chrome.runtime.sendMessage({ type: "UI_REFRESH" });
-      });
+      // 3. Notify UI to refresh regardless of server success
+      chrome.runtime.sendMessage({ type: "UI_REFRESH" });
     });
   }
 });

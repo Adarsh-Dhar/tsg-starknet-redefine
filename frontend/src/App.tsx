@@ -25,6 +25,21 @@ declare global {
   }
 }
 
+// Define the interface for your realtime stats to solve the TS error
+interface RealtimeStats {
+  screenTimeMinutes: number;
+  brainrotScore: number;
+}
+
+// Define interface for the Chrome Storage response
+interface StorageResponse {
+  starknet_address?: string;
+  realtime_stats?: RealtimeStats;
+  dailyGoal?: number;
+  screenTime?: number;
+  tx_status?: string;
+}
+
 class ErrorBoundary extends Component<{ children: React.ReactNode }, { hasError: boolean }> {
   constructor(props: any) {
     super(props);
@@ -46,7 +61,6 @@ class ErrorBoundary extends Component<{ children: React.ReactNode }, { hasError:
   }
 }
 
-
 function AppContent() {
   const location = useLocation();
   const [syncAddress, setSyncAddress] = useState<string | null>(null);
@@ -55,34 +69,40 @@ function AppContent() {
   const [dailyGoal, setDailyGoal] = useState(180);
   const [error, setError] = useState<string | null>(null);
 
-  // 1. Define the interface for your server data
-  interface RealtimeStats {
-    screenTimeMinutes: number;
-    brainrotScore: number;
-  }
-
-  // Function to pull data from storage
+  // Function to pull data from storage with proper TypeScript casting
   const loadRealtimeStats = () => {
     if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-      chrome.storage.local.get(['starknet_address', 'realtime_stats', 'dailyGoal'], (res) => {
-        if (typeof res.starknet_address === 'string' && res.starknet_address.length > 0) {
-          setSyncAddress(res.starknet_address);
-        } else {
-          setSyncAddress(null);
-        }
-        if (typeof res.dailyGoal === 'number') {
-          setDailyGoal(res.dailyGoal);
-        }
-        const statsData = res.realtime_stats as RealtimeStats | undefined;
+      chrome.storage.local.get(['starknet_address', 'realtime_stats', 'dailyGoal', 'screenTime', 'tx_status'], (items) => {
+        const res = items as StorageResponse; // Fix: Explicitly cast the storage result
+
+        // 1. Sync Address
+        setSyncAddress(res.starknet_address || null);
+        
+        // 2. Sync Goal
+        const goal = res.dailyGoal || 180;
+        setDailyGoal(goal);
+
+        // 3. Sync Tx Status
+        if (res.tx_status) setTxStatus(res.tx_status);
+
+        // 4. Sync Stats (Prefer Server data, fallback to local tracking)
+        const statsData = res.realtime_stats;
+        
         if (statsData && typeof statsData.screenTimeMinutes === 'number') {
           setStats({
             screenTime: Math.round(statsData.screenTimeMinutes),
-            percentage: Math.min(100, (statsData.screenTimeMinutes / (res.dailyGoal || 180 as any)) * 100)
+            percentage: Math.min(100, (statsData.screenTimeMinutes / goal) * 100)
           });
           setError(null);
+        } else if (res.screenTime && typeof res.screenTime === 'number') {
+          // Fallback to local tracking if server data isn't ready
+          setStats({
+            screenTime: Math.round(res.screenTime),
+            percentage: Math.min(100, (res.screenTime / goal) * 100)
+          });
+          setError("Using local tracking (Syncing with server...)");
         } else {
-          setStats({ screenTime: 0, percentage: 0 });
-          setError("No activity data found. Watch a YouTube Short to begin tracking.");
+          setError("No activity detected. Watch a YouTube Short for >5s to start tracking.");
         }
       });
     }
@@ -92,11 +112,12 @@ function AppContent() {
     if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
       const listener = (msg: any) => {
         if (msg.type === "UI_REFRESH") {
+          console.log("App: Refreshing Sidebar Data");
           loadRealtimeStats();
         }
       };
       chrome.runtime.onMessage.addListener(listener);
-      loadRealtimeStats();
+      loadRealtimeStats(); // Initial check on mount
       return () => chrome.runtime.onMessage.removeListener(listener);
     }
   }, []);
@@ -112,6 +133,7 @@ function AppContent() {
               </div>
               <h1 className="text-xl font-bold text-emerald-400">Touch Grass</h1>
             </div>
+            
             <div className="flex items-center gap-2">
               {syncAddress && (
                 <div className="px-2 py-1 rounded bg-emerald-500/10 border border-emerald-500/20 text-[10px] text-emerald-400 font-mono">
@@ -127,6 +149,7 @@ function AppContent() {
               )}
             </div>
           </div>
+          
           <div className="flex justify-around py-2 border-t border-emerald-500/5">
             {[
               { path: '/', icon: LayoutDashboard },
@@ -150,9 +173,18 @@ function AppContent() {
           </div>
         </div>
       </nav>
+
       <main className="max-w-7xl mx-auto px-4 py-6">
         <Routes>
-          <Route path="/" element={<Dashboard syncAddress={syncAddress} screenTime={stats.screenTime} dailyGoal={dailyGoal} percentage={stats.percentage} syncError={error} />} />
+          <Route path="/" element={
+            <Dashboard 
+              syncAddress={syncAddress} 
+              screenTime={stats.screenTime} 
+              dailyGoal={dailyGoal} 
+              percentage={stats.percentage} 
+              syncError={error} 
+            />
+          } />
           <Route path="/leaderboard" element={<LeaderboardPage />} />
           <Route path="/insights" element={<InsightsPage screenTime={stats.screenTime} dailyGoal={dailyGoal} />} />
           <Route path="/wallet" element={<WalletPage />} />

@@ -76,9 +76,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             })
           });
           const data = await response.json();
-          if (data.success) {
-            chrome.storage.local.set({ realtime_stats: data.stats });
-          }
+            if (data.success) {
+              // Ensure the object looks exactly like this:
+              // { brainrotScore: 12.5, screenTimeMinutes: 5 }
+              const stats = {
+                brainrotScore: data.stats?.brainrotScore ?? 0,
+                screenTimeMinutes: data.stats?.screenTimeMinutes ?? 0
+              };
+              chrome.storage.local.set({ realtime_stats: stats }, () => {
+                chrome.runtime.sendMessage({ type: "UI_REFRESH" });
+              });
+            }
         } catch (err) {
           console.error("❌ Server Sync Failed:", err.message);
         }

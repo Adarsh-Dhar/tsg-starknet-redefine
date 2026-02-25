@@ -25,13 +25,13 @@ declare global {
   }
 }
 
-// Define the interface for your realtime stats to solve the TS error
+// Interface for server data structure
 interface RealtimeStats {
   screenTimeMinutes: number;
   brainrotScore: number;
 }
 
-// Define interface for the Chrome Storage response
+// Interface for Chrome Storage response
 interface StorageResponse {
   starknet_address?: string;
   realtime_stats?: RealtimeStats;
@@ -62,47 +62,19 @@ class ErrorBoundary extends Component<{ children: React.ReactNode }, { hasError:
 }
 
 function AppContent() {
-  const location = useLocation();
+  const [brainrotScore, setBrainrotScore] = useState<number>(0);
   const [syncAddress, setSyncAddress] = useState<string | null>(null);
-  const [txStatus, setTxStatus] = useState<string | null>(null);
-  const [stats, setStats] = useState({ screenTime: 0, percentage: 0 });
-  const [dailyGoal, setDailyGoal] = useState(180);
-  const [error, setError] = useState<string | null>(null);
 
-  // Function to pull data from storage with proper TypeScript casting
-  const loadRealtimeStats = () => {
+  const loadStats = () => {
     if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-      chrome.storage.local.get(['starknet_address', 'realtime_stats', 'dailyGoal', 'screenTime', 'tx_status'], (items) => {
-        const res = items as StorageResponse; // Fix: Explicitly cast the storage result
+      chrome.storage.local.get(['realtime_stats', 'starknet_address'], (res) => {
+        if (res.starknet_address) setSyncAddress(res.starknet_address as string);
 
-        // 1. Sync Address
-        setSyncAddress(res.starknet_address || null);
-        
-        // 2. Sync Goal
-        const goal = res.dailyGoal || 180;
-        setDailyGoal(goal);
-
-        // 3. Sync Tx Status
-        if (res.tx_status) setTxStatus(res.tx_status);
-
-        // 4. Sync Stats (Prefer Server data, fallback to local tracking)
-        const statsData = res.realtime_stats;
-        
-        if (statsData && typeof statsData.screenTimeMinutes === 'number') {
-          setStats({
-            screenTime: Math.round(statsData.screenTimeMinutes),
-            percentage: Math.min(100, (statsData.screenTimeMinutes / goal) * 100)
-          });
-          setError(null);
-        } else if (res.screenTime && typeof res.screenTime === 'number') {
-          // Fallback to local tracking if server data isn't ready
-          setStats({
-            screenTime: Math.round(res.screenTime),
-            percentage: Math.min(100, (res.screenTime / goal) * 100)
-          });
-          setError("Using local tracking (Syncing with server...)");
-        } else {
-          setError("No activity detected. Watch a YouTube Short for >5s to start tracking.");
+        // Directly extract and set the raw brainrot score
+        const stats = res.realtime_stats as { brainrotScore: number } | undefined;
+        if (stats && typeof stats.brainrotScore === 'number') {
+          console.log("🔥 Latest Brainrot Score:", stats.brainrotScore);
+          setBrainrotScore(stats.brainrotScore);
         }
       });
     }
@@ -112,12 +84,11 @@ function AppContent() {
     if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
       const listener = (msg: any) => {
         if (msg.type === "UI_REFRESH") {
-          console.log("App: Refreshing Sidebar Data");
-          loadRealtimeStats();
+          loadStats();
         }
       };
       chrome.runtime.onMessage.addListener(listener);
-      loadRealtimeStats(); // Initial check on mount
+      loadStats();
       return () => chrome.runtime.onMessage.removeListener(listener);
     }
   }, []);
@@ -133,23 +104,21 @@ function AppContent() {
               </div>
               <h1 className="text-xl font-bold text-emerald-400">Touch Grass</h1>
             </div>
-            
             <div className="flex items-center gap-2">
               {syncAddress && (
                 <div className="px-2 py-1 rounded bg-emerald-500/10 border border-emerald-500/20 text-[10px] text-emerald-400 font-mono">
                   {syncAddress.slice(0, 6)}...{syncAddress.slice(-4)}
                 </div>
               )}
-              {txStatus && (
+              {/* {txStatus && (
                 <div className={`px-2 py-1 rounded border text-[10px] font-mono ${
                   txStatus === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-rose-500/10 border-rose-500/20 text-rose-400'
                 }`}>
                   Tx: {txStatus}
                 </div>
-              )}
+              )} */}
             </div>
           </div>
-          
           <div className="flex justify-around py-2 border-t border-emerald-500/5">
             {[
               { path: '/', icon: LayoutDashboard },
@@ -178,15 +147,12 @@ function AppContent() {
         <Routes>
           <Route path="/" element={
             <Dashboard 
-              syncAddress={syncAddress} 
-              screenTime={stats.screenTime} 
-              dailyGoal={dailyGoal} 
-              percentage={stats.percentage} 
-              syncError={error} 
+              syncAddress={syncAddress}
+              brainrotScore={brainrotScore} 
             />
           } />
           <Route path="/leaderboard" element={<LeaderboardPage />} />
-          <Route path="/insights" element={<InsightsPage screenTime={stats.screenTime} dailyGoal={dailyGoal} />} />
+          {/* <Route path="/insights" element={<InsightsPage screenTime={screenTime}dailyGoal={180} />} /> */}
           <Route path="/wallet" element={<WalletPage />} />
           <Route path="/data" element={<DataPage />} />
         </Routes>

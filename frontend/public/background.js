@@ -1,3 +1,20 @@
+chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => {
+  console.log("📥 External Sync Message Received");
+
+  if (request.type === "WALLET_SYNC") {
+    chrome.storage.local.set({
+      starknet_address: request.address,
+      starknet_pubkey: request.pubKey,
+      is_connected: true
+    }, () => {
+      // 1. Tell any open internal UI (Sidebar) to refresh NOW
+      chrome.runtime.sendMessage({ type: "UI_REFRESH" });
+      // 2. Acknowledge the web tab
+      sendResponse({ success: true });
+    });
+    return true; // Keep channel open for async set callback
+  }
+});
 // Listen for messages from the web DApp (localhost:5173)
 // This allows the side panel to open when the user clicks the extension icon
 chrome.sidePanel

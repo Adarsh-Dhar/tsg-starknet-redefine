@@ -1,6 +1,8 @@
+// Unified External Listener
 chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => {
-  if (request.type === "WALLET_SYNC") {
-    console.log("📥 External Sync Message Received");
+  console.log("📥 External Message:", request.type);
+
+  if (request.type === "WALLET_SYNC" || request.type === "WALLET_CONNECTED") {
     const dataToSave = {
       starknet_address: request.address,
       starknet_pubkey: request.pubKey,
@@ -8,16 +10,43 @@ chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => 
       last_sync: Date.now()
     };
     chrome.storage.local.set(dataToSave, () => {
-      if (chrome.runtime.lastError) {
-        console.error("❌ Storage Error:", chrome.runtime.lastError);
-        sendResponse({ success: false, error: chrome.runtime.lastError.message });
-      } else {
-        console.log("💾 Wallet saved to extension storage");
-        chrome.runtime.sendMessage({ type: "UI_REFRESH" });
-        sendResponse({ success: true });
+      chrome.runtime.sendMessage({ type: "UI_REFRESH" });
+      sendResponse({ success: true });
+    });
+    return true;
+  }
+
+  // Handle transaction signing...
+  if (request.type === "SIGN_TX") {
+    chrome.storage.local.set({
+      tx_request: request.tx,
+      tx_status: "pending"
+    }, async () => {
+      let txStatus = "pending";
+      try {
+        chrome.tabs.query({ url: "http://localhost:5173/*" }, (tabs) => {
+          if (tabs.length > 0) {
+            chrome.tabs.sendMessage(tabs[0].id, {
+              type: "EXECUTE_TX",
+              tx: request.tx
+            }, (response) => {
+              txStatus = response && response.success ? "success" : "fail";
+              chrome.storage.local.set({ tx_status: txStatus });
+              sendResponse({ success: txStatus === "success" });
+            });
+          } else {
+            txStatus = "fail";
+            chrome.storage.local.set({ tx_status: txStatus });
+            sendResponse({ success: false });
+          }
+        });
+      } catch (e) {
+        txStatus = "fail";
+        chrome.storage.local.set({ tx_status: txStatus });
+        sendResponse({ success: false });
       }
     });
-    return true; // Keep channel open for async response
+    return true;
   }
 });
 
@@ -56,78 +85,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 });
 
-
-chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => {
-  // Duplicate WALLET_SYNC handler removed; unified above
-  // Sign Transaction bridge
-  if (request.type === "SIGN_TX") {
-    // Save tx request to storage for sidebar to pick up
-    chrome.storage.local.set({
-      tx_request: request.tx,
-      tx_status: "pending"
-    }, async () => {
-      // Try to execute the transaction using injected provider
-      let txStatus = "pending";
-      try {
-        // NOTE: Extension context cannot access window.starknet directly.
-        // Instead, send a message to the web tab to execute the tx.
-        // Find the web tab
-        chrome.tabs.query({ url: "http://localhost:5173/*" }, (tabs) => {
-          if (tabs.length > 0) {
-            chrome.tabs.sendMessage(tabs[0].id, {
-              type: "EXECUTE_TX",
-              tx: request.tx
-            }, (response) => {
-              txStatus = response && response.success ? "success" : "fail";
-              chrome.storage.local.set({ tx_status: txStatus });
-              sendResponse({ success: txStatus === "success" });
-            });
-          } else {
-            txStatus = "fail";
-            chrome.storage.local.set({ tx_status: txStatus });
-            sendResponse({ success: false });
-          }
-        });
-      } catch (e) {
-        txStatus = "fail";
-        chrome.storage.local.set({ tx_status: txStatus });
-        sendResponse({ success: false });
-      }
-    });
-    return true;
-  }
-});
-
-chrome.runtime.onMessageExternal.addListener(
-  (request, sender, sendResponse) => {
-    if (request.type === "WALLET_CONNECTED") {
-      // Save to storage so the popup can see it
-      chrome.storage.local.set({
-        starknet_address: request.address,
-        starknet_pubkey: request.pubKey,
-        is_connected: true
-      }, () => {
-        sendResponse({ success: true });
-      });
-      return true; // Keep channel open
-    }
-  }
-);
-chrome.runtime.onMessageExternal.addListener(
-  (request, sender, sendResponse) => {
-    if (request.type === "WALLET_CONNECTED") {
-      // Save to storage so the popup can see it
-      chrome.storage.local.set({
-        starknet_address: request.address,
-        starknet_pubkey: request.pubKey,
-        is_connected: true
-      }, () => {
-        sendResponse({ success: true });
-      });
-      return true; // Keep channel open
-    }
-  }
-);
+// ...existing code...
 // Background Service Worker for Touch Some Grass Extension
 
 

@@ -66,19 +66,28 @@ function AppContent() {
     }
   };
 
+  interface RealtimeStats {
+  screenTimeMinutes: number;
+  brainrotScore: number;
+}
+
   // Load real-time stats from storage
   const loadRealtimeStats = () => {
-    if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-      chrome.storage.local.get(['realtime_stats'], (res) => {
-        if (res.realtime_stats) {
-          setStats({
-            screenTime: Math.round(res.realtime_stats as any),
-            percentage: Math.min(100, (res.realtime_stats as any / 180) * 100)
-          });
-        }
-      });
-    }
-  };
+  if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+    // 2. Tell TypeScript to expect our interface
+    chrome.storage.local.get(['realtime_stats'], (res) => {
+      const statsData = res.realtime_stats as RealtimeStats | undefined;
+
+      if (statsData && typeof statsData.screenTimeMinutes === 'number') {
+        const minutes = statsData.screenTimeMinutes;
+        setStats({
+          screenTime: Math.round(minutes),
+          percentage: Math.min(100, (minutes / 180) * 100)
+        });
+      }
+    });
+  }
+}
 
   // 2. Handle Message Passing & UI Refresh
   useEffect(() => {

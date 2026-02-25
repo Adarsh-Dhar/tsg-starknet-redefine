@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+  const [copied, setCopied] = useState(false);
 import { GRAVITY_VAULT_ABI } from './abi';
 import { Wallet, ArrowUpRight, ArrowDownLeft, ExternalLink } from 'lucide-react';
 import { useAccount, useConnect, useDisconnect } from "@starknet-react/core";
@@ -131,11 +132,22 @@ export default function WalletPage() {
               </span>
             </div>
             {pubKey && (
-              <div className="p-4 rounded-xl bg-slate-900/40 border border-emerald-500/10 flex justify-between items-center overflow-hidden">
+              <div className="p-4 rounded-xl bg-slate-900/40 border border-emerald-500/10 flex justify-between items-center overflow-hidden gap-2">
                 <span className="text-emerald-300/60 text-xs uppercase font-bold tracking-widest">PubKey</span>
                 <span className="text-emerald-100 font-mono text-[10px] opacity-60 truncate ml-4 italic">
                   {pubKey}
                 </span>
+                <button
+                  onClick={async () => {
+                    await navigator.clipboard.writeText(pubKey.toString());
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 1200);
+                  }}
+                  className="ml-2 px-2 py-1 text-xs rounded bg-emerald-700/30 text-emerald-200 hover:bg-emerald-600/60 transition-colors border border-emerald-500/20"
+                  title="Copy to clipboard"
+                >
+                  {copied ? 'Copied!' : 'Copy'}
+                </button>
               </div>
             )}
           </div>

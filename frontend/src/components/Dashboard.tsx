@@ -1,6 +1,8 @@
-import React from 'react';
-import { useAccount } from "@starknet-react/core";
-import { CheckCircle2, AlertCircle, Clock, Zap } from 'lucide-react';
+// frontend/src/components/Dashboard.tsx
+
+import { useAccount, useConnect } from "@starknet-react/core";
+import { useNavigate } from 'react-router-dom';
+import { CheckCircle2, AlertCircle, Clock, Zap, Wallet } from 'lucide-react';
 
 interface DashboardProps {
   screenTime: number;
@@ -17,8 +19,9 @@ const formatTime = (minutes: number): string => {
 
 export default function Dashboard({ screenTime, dailyGoal, percentage }: DashboardProps) {
   const { isConnected, status } = useAccount();
+  const { connect, connectors } = useConnect();
+  const navigate = useNavigate(); // Initialize navigation
 
-  // Handle Wallet States before rendering sensitive data
   if (status === "connecting") {
     return (
       <div className="glass-effect glass-glow rounded-2xl p-12 flex flex-col items-center justify-center border border-emerald-500/20">
@@ -33,9 +36,25 @@ export default function Dashboard({ screenTime, dailyGoal, percentage }: Dashboa
     return (
       <div className="glass-effect glass-glow rounded-2xl p-12 flex flex-col items-center justify-center border border-rose-500/20">
         <AlertCircle className="w-12 h-12 text-rose-500 mb-4 opacity-50" />
-        <div className="text-rose-400 font-bold text-center">
+        <div className="text-rose-400 font-bold text-center mb-6">
           Connection Required
           <p className="text-xs font-normal text-rose-400/60 mt-2">Please connect your Starknet wallet to view metrics</p>
+        </div>
+        
+        <div className="flex flex-col gap-3 w-full max-w-xs">
+          {connectors.map((connector) => (
+            <button
+              key={connector.id}
+              onClick={async () => {
+                await connect({ connector });
+                navigate('/wallet');
+              }}
+              className="flex items-center justify-center gap-3 px-6 py-3 rounded-xl bg-emerald-500 text-slate-900 font-bold hover:bg-emerald-400 transition-all active:scale-95 shadow-lg shadow-emerald-500/20"
+            >
+              <Wallet className="w-5 h-5" />
+              Connect {connector.name}
+            </button>
+          ))}
         </div>
       </div>
     );
@@ -46,7 +65,6 @@ export default function Dashboard({ screenTime, dailyGoal, percentage }: Dashboa
   const isWarning = percentage >= 50 && percentage < 100;
   const isExceeded = percentage >= 100;
 
-  // Define stroke colors based on status
   const getStrokeColor = () => {
     if (isGood) return 'url(#gradientGood)';
     if (isWarning) return 'url(#gradientWarning)';
@@ -55,23 +73,12 @@ export default function Dashboard({ screenTime, dailyGoal, percentage }: Dashboa
 
   return (
     <div className="space-y-6">
-      {/* Main Circle Progress */}
       <div className="glass-effect glass-glow rounded-2xl p-8 flex flex-col items-center justify-center border border-emerald-500/10">
         <div className="relative w-48 h-48 mb-6">
           <svg className="w-full h-full transform -rotate-90" viewBox="0 0 200 200">
+            <circle cx="100" cy="100" r="90" fill="none" stroke="rgba(16, 185, 129, 0.1)" strokeWidth="12" />
             <circle
-              cx="100"
-              cy="100"
-              r="90"
-              fill="none"
-              stroke="rgba(16, 185, 129, 0.1)"
-              strokeWidth="12"
-            />
-            <circle
-              cx="100"
-              cy="100"
-              r="90"
-              fill="none"
+              cx="100" cy="100" r="90" fill="none"
               stroke={getStrokeColor()}
               strokeWidth="12"
               strokeDasharray={`${(Math.min(percentage, 100) / 100) * 565.48} 565.48`}
@@ -93,20 +100,17 @@ export default function Dashboard({ screenTime, dailyGoal, percentage }: Dashboa
               </linearGradient>
             </defs>
           </svg>
-
           <div className="absolute inset-0 flex flex-col items-center justify-center">
             <div className="text-4xl font-bold text-white mb-1">{Math.round(percentage)}%</div>
             <div className="text-xs font-bold uppercase tracking-tighter text-emerald-300/40">Daily Cap</div>
           </div>
         </div>
-
         <div className="text-center">
           <h2 className="text-2xl font-bold text-white mb-1">{formatTime(screenTime)}</h2>
           <p className="text-xs text-emerald-300/50 uppercase tracking-widest font-bold">Total Exposure</p>
         </div>
       </div>
 
-      {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="glass-effect rounded-xl p-6 border border-emerald-500/10">
           <div className="flex items-center gap-3 mb-4">
@@ -115,7 +119,6 @@ export default function Dashboard({ screenTime, dailyGoal, percentage }: Dashboa
           </div>
           <div className="text-2xl font-bold text-emerald-400">{formatTime(screenTime)}</div>
         </div>
-
         <div className="glass-effect rounded-xl p-6 border border-emerald-500/10">
           <div className="flex items-center gap-3 mb-4">
             <Zap className="w-4 h-4 text-yellow-400" />
@@ -123,7 +126,6 @@ export default function Dashboard({ screenTime, dailyGoal, percentage }: Dashboa
           </div>
           <div className="text-2xl font-bold text-yellow-400">{formatTime(dailyGoal)}</div>
         </div>
-
         <div className="glass-effect rounded-xl p-6 border border-emerald-500/10">
           <div className="flex items-center gap-3 mb-4">
             {isExceeded ? <AlertCircle className="w-4 h-4 text-rose-400" /> : <CheckCircle2 className="w-4 h-4 text-emerald-400" />}
@@ -135,7 +137,6 @@ export default function Dashboard({ screenTime, dailyGoal, percentage }: Dashboa
         </div>
       </div>
 
-      {/* Dynamic Status Notification */}
       <div className={`glass-effect rounded-xl p-5 border ${isGood ? 'border-emerald-500/20 bg-emerald-500/5' : isWarning ? 'border-yellow-500/20 bg-yellow-500/5' : 'border-rose-500/20 bg-rose-500/5'}`}>
         <div className="flex items-center gap-4">
           {isGood ? <CheckCircle2 className="w-6 h-6 text-emerald-400" /> : <AlertCircle className="w-6 h-6 text-yellow-400" />}

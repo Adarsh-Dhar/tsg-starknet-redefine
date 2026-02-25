@@ -21,7 +21,14 @@ export default defineConfig({
     outDir: 'dist',
     rollupOptions: {
       input: {
-        popup: 'index.html', // Point this to your main entry
+        main: path.resolve(__dirname, 'index.html'),
+        popup: path.resolve(__dirname, 'public/popup.html'),
+      },
+      output: {
+        entryFileNames: (chunkInfo) => {
+          if (chunkInfo.name === 'popup') return 'popup.js';
+          return '[name].js';
+        },
       },
     },
   },

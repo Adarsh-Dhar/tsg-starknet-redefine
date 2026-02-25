@@ -1,3 +1,17 @@
+// Listen for messages from the web DApp (localhost:5173)
+chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => {
+  if (request.type === "WALLET_SYNC") {
+    chrome.storage.local.set({
+      starknet_address: request.address,
+      starknet_pubkey: request.pubKey,
+      is_connected: true
+    }, () => {
+      console.log("Wallet info saved to extension storage");
+      sendResponse({ success: true });
+    });
+    return true; // Keep channel open for async response
+  }
+});
 chrome.runtime.onMessageExternal.addListener(
   (request, sender, sendResponse) => {
     if (request.type === "WALLET_CONNECTED") {

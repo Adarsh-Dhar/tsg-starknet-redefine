@@ -32,31 +32,23 @@ function AppContent() {
   const [syncAddress, setSyncAddress] = useState<string | null>(null);
 
   // Sync state with chrome storage for extension context
-  useEffect(() => {
-    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-      // 1. Initial check on load
-      chrome.storage.local.get(['starknet_address'], (res) => {
-        if (res.starknet_address) {
-          setSyncAddress(res.starknet_address as string);
-        }
-      });
-
-      // 2. Correctly typed listener for storage changes
-      const listener = (
-        changes: { [key: string]: chrome.storage.StorageChange },
-        areaName: string
-      ) => {
-        if (areaName === 'local' && changes.starknet_address) {
-          setSyncAddress(changes.starknet_address.newValue as string);
-          // Optional: Refresh the popup to update Starknet hooks
-          window.location.reload();
-        }
-      };
-
-      chrome.storage.onChanged.addListener(listener);
-      return () => chrome.storage.onChanged.removeListener(listener);
-    }
-  }, []);
+    useEffect(() => {
+      if (typeof chrome !== 'undefined' && chrome.storage) {
+        // 1. Initial check
+        chrome.storage.local.get(['starknet_address'], (res) => {
+          if (res.starknet_address) setSyncAddress(res.starknet_address as string);
+        });
+        // 2. Listen for background.js saving the data
+        const listener = (changes: { starknet_address: { newValue: React.SetStateAction<string | null>; }; }, area: string) => {
+          if (area === 'local' && changes.starknet_address) {
+            setSyncAddress(changes.starknet_address.newValue);
+            window.location.reload(); // Force reload to refresh provider state
+          }
+        };
+        chrome.storage.onChanged.addListener(listener as any);
+        return () => chrome.storage.onChanged.removeListener(listener as any);
+      }
+    }, []);
 
   return (
     <div className="h-full bg-slate-950 text-slate-200 font-sans">

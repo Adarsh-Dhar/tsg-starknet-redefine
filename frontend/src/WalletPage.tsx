@@ -21,19 +21,19 @@ export default function WalletPage() {
     const syncWithExtension = async () => {
       if (isConnected && address && account) {
         const pk = await account.signer.getPubKey();
-        // REPLACE THIS with your actual Extension ID from chrome://extensions
-        const EXTENSION_ID = "YOUR_EXTENSION_ID_HERE";
+        // IMPORTANT: Get this from chrome://extensions (e.g. "abcdef...")
+        const EXTENSION_ID = "khehdcnoacelhjahplhodneiomdlbmed";
 
-        if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+        if (window.chrome && chrome.runtime && chrome.runtime.sendMessage) {
           chrome.runtime.sendMessage(EXTENSION_ID, {
-            type: "WALLET_CONNECTED",
+            type: "WALLET_SYNC",
             address: address,
             pubKey: pk
           }, (response) => {
             if (chrome.runtime.lastError) {
-              console.error("Connection failed. Check Extension ID:", chrome.runtime.lastError);
+              console.error("Sync failed:", chrome.runtime.lastError.message);
             } else {
-              console.log("Extension notified successfully!");
+              console.log("Extension synced successfully!");
             }
           });
         }

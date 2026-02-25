@@ -51,23 +51,38 @@ function AppContent() {
   const location = useLocation();
   const [syncAddress, setSyncAddress] = useState<string | null>(null);
   const [txStatus, setTxStatus] = useState<string | null>(null);
-  const [screenTime, setScreenTime] = useState(0);
+  const [stats, setStats] = useState({ screenTime: 0, percentage: 0 });
   const [dailyGoal, setDailyGoal] = useState(180);
+  const [error, setError] = useState<string | null>(null);
+
+  // 1. Define the interface for your server data
+  interface RealtimeStats {
+    screenTimeMinutes: number;
+    brainrotScore: number;
+  }
 
   // Function to pull data from storage
-  const loadData = () => {
+  const loadRealtimeStats = () => {
     if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-      chrome.storage.local.get(['starknet_address', 'screenTime', 'dailyGoal'], (res) => {
+      chrome.storage.local.get(['starknet_address', 'realtime_stats', 'dailyGoal'], (res) => {
         if (typeof res.starknet_address === 'string' && res.starknet_address.length > 0) {
           setSyncAddress(res.starknet_address);
         } else {
           setSyncAddress(null);
         }
-        if (typeof res.screenTime === 'number') {
-          setScreenTime(Math.round(res.screenTime));
-        }
         if (typeof res.dailyGoal === 'number') {
           setDailyGoal(res.dailyGoal);
+        }
+        const statsData = res.realtime_stats as RealtimeStats | undefined;
+        if (statsData && typeof statsData.screenTimeMinutes === 'number') {
+          setStats({
+            screenTime: Math.round(statsData.screenTimeMinutes),
+            percentage: Math.min(100, (statsData.screenTimeMinutes / (res.dailyGoal || 180 as any)) * 100)
+          });
+          setError(null);
+        } else {
+          setStats({ screenTime: 0, percentage: 0 });
+          setError("No activity data found. Watch a YouTube Short to begin tracking.");
         }
       });
     }
@@ -77,11 +92,11 @@ function AppContent() {
     if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
       const listener = (msg: any) => {
         if (msg.type === "UI_REFRESH") {
-          loadData();
+          loadRealtimeStats();
         }
       };
       chrome.runtime.onMessage.addListener(listener);
-      loadData();
+      loadRealtimeStats();
       return () => chrome.runtime.onMessage.removeListener(listener);
     }
   }, []);
@@ -137,9 +152,9 @@ function AppContent() {
       </nav>
       <main className="max-w-7xl mx-auto px-4 py-6">
         <Routes>
-          <Route path="/" element={<Dashboard syncAddress={syncAddress} screenTime={screenTime} dailyGoal={dailyGoal} percentage={(screenTime / dailyGoal) * 100} />} />
+          <Route path="/" element={<Dashboard syncAddress={syncAddress} screenTime={stats.screenTime} dailyGoal={dailyGoal} percentage={stats.percentage} syncError={error} />} />
           <Route path="/leaderboard" element={<LeaderboardPage />} />
-          <Route path="/insights" element={<InsightsPage screenTime={screenTime} dailyGoal={dailyGoal} />} />
+          <Route path="/insights" element={<InsightsPage screenTime={stats.screenTime} dailyGoal={dailyGoal} />} />
           <Route path="/wallet" element={<WalletPage />} />
           <Route path="/data" element={<DataPage />} />
         </Routes>

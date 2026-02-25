@@ -70,16 +70,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             address: res.starknet_address
           })
         });
-        const data = await response.json();
-        // Save the new real-time values to storage
-        chrome.storage.local.set({
-          realtime_stats: data.stats
-        }, () => {
-          // Tell Sidebar to update its view
-          chrome.runtime.sendMessage({ type: "UI_REFRESH" });
-        });
+          if (!response.ok) throw new Error(`Server returned ${response.status}`);
+          const data = await response.json();
+          // Ensure you are saving data.stats (the object)
+          chrome.storage.local.set({ realtime_stats: data.stats }, () => {
+            chrome.runtime.sendMessage({ type: "UI_REFRESH" });
+          });
       } catch (err) {
-        console.error("Failed to sync activity to server:", err);
+          console.error("❌ Network Error:", err.message);
       }
     });
   }

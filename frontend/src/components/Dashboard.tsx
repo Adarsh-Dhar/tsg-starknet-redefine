@@ -6,10 +6,11 @@ interface DashboardProps {
   screenTime: number;
   dailyGoal: number;
   percentage: number;
+  syncError: string | null;
   syncAddress?: string | null;
 }
 
-export default function Dashboard({ screenTime, dailyGoal, percentage, syncAddress }: DashboardProps) {
+export default function Dashboard({ screenTime, dailyGoal, percentage, syncError, syncAddress }: DashboardProps) {
   const { isConnected: directConnected, status } = useAccount();
 
   // Logic: Show dashboard if directly connected OR if we have a synced address from the web tab
@@ -43,6 +44,12 @@ export default function Dashboard({ screenTime, dailyGoal, percentage, syncAddre
 
   return (
     <div className="space-y-6 max-w-[400px] mx-auto">
+      {syncError && (
+        <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg flex items-center gap-2 text-[10px] text-amber-400">
+          <AlertCircle className="w-3 h-3" />
+          {syncError}
+        </div>
+      )}
       <div className="glass-effect rounded-2xl p-8 flex flex-col items-center border border-emerald-500/10">
         <div className="text-4xl font-bold text-white mb-1">{Math.round(percentage)}%</div>
         <div className="text-xs font-bold uppercase text-emerald-300/40">Daily Cap</div>

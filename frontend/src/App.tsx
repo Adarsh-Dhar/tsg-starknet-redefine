@@ -51,56 +51,37 @@ function AppContent() {
   const location = useLocation();
   const [syncAddress, setSyncAddress] = useState<string | null>(null);
   const [txStatus, setTxStatus] = useState<string | null>(null);
-  const [stats, setStats] = useState({ screenTime: 0, percentage: 0 });
+  const [screenTime, setScreenTime] = useState(0);
+  const [dailyGoal, setDailyGoal] = useState(180);
 
-  // Function to pull data from storage without refreshing the whole app
+  // Function to pull data from storage
   const loadData = () => {
     if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-      chrome.storage.local.get(['starknet_address'], (res) => {
+      chrome.storage.local.get(['starknet_address', 'screenTime', 'dailyGoal'], (res) => {
         if (typeof res.starknet_address === 'string' && res.starknet_address.length > 0) {
           setSyncAddress(res.starknet_address);
         } else {
           setSyncAddress(null);
         }
+        if (typeof res.screenTime === 'number') {
+          setScreenTime(Math.round(res.screenTime));
+        }
+        if (typeof res.dailyGoal === 'number') {
+          setDailyGoal(res.dailyGoal);
+        }
       });
     }
   };
 
-  interface RealtimeStats {
-  screenTimeMinutes: number;
-  brainrotScore: number;
-}
-
-  // Load real-time stats from storage
-  const loadRealtimeStats = () => {
-  if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-    // 2. Tell TypeScript to expect our interface
-    chrome.storage.local.get(['realtime_stats'], (res) => {
-      const statsData = res.realtime_stats as RealtimeStats | undefined;
-
-      if (statsData && typeof statsData.screenTimeMinutes === 'number') {
-        const minutes = statsData.screenTimeMinutes;
-        setStats({
-          screenTime: Math.round(minutes),
-          percentage: Math.min(100, (minutes / 180) * 100)
-        });
-      }
-    });
-  }
-}
-
-  // 2. Handle Message Passing & UI Refresh
   useEffect(() => {
     if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
       const listener = (msg: any) => {
         if (msg.type === "UI_REFRESH") {
           loadData();
-          loadRealtimeStats(); // Pull newest YT data
         }
       };
       chrome.runtime.onMessage.addListener(listener);
-      loadData(); // Initial check
-      loadRealtimeStats(); // Initial stats
+      loadData();
       return () => chrome.runtime.onMessage.removeListener(listener);
     }
   }, []);
@@ -116,7 +97,6 @@ function AppContent() {
               </div>
               <h1 className="text-xl font-bold text-emerald-400">Touch Grass</h1>
             </div>
-            
             <div className="flex items-center gap-2">
               {syncAddress && (
                 <div className="px-2 py-1 rounded bg-emerald-500/10 border border-emerald-500/20 text-[10px] text-emerald-400 font-mono">
@@ -132,8 +112,6 @@ function AppContent() {
               )}
             </div>
           </div>
-          
-          {/* Mobile/Sidebar Navigation Icons */}
           <div className="flex justify-around py-2 border-t border-emerald-500/5">
             {[
               { path: '/', icon: LayoutDashboard },
@@ -157,12 +135,11 @@ function AppContent() {
           </div>
         </div>
       </nav>
-
       <main className="max-w-7xl mx-auto px-4 py-6">
         <Routes>
-          <Route path="/" element={<Dashboard syncAddress={syncAddress} screenTime={stats.screenTime} dailyGoal={180} percentage={stats.percentage} />} />
+          <Route path="/" element={<Dashboard syncAddress={syncAddress} screenTime={screenTime} dailyGoal={dailyGoal} percentage={(screenTime / dailyGoal) * 100} />} />
           <Route path="/leaderboard" element={<LeaderboardPage />} />
-          <Route path="/insights" element={<InsightsPage screenTime={stats.screenTime} dailyGoal={180} />} />
+          <Route path="/insights" element={<InsightsPage screenTime={screenTime} dailyGoal={dailyGoal} />} />
           <Route path="/wallet" element={<WalletPage />} />
           <Route path="/data" element={<DataPage />} />
         </Routes>

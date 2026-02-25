@@ -85,6 +85,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 });
 
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === "YOUTUBE_ACTIVITY") {
+    chrome.storage.local.get(['screenTime'], (res) => {
+      const currentMinutes = res.screenTime || 0;
+      const addedMinutes = message.duration / 60;
+      chrome.storage.local.set({
+        screenTime: currentMinutes + addedMinutes
+      }, () => {
+        chrome.runtime.sendMessage({ type: "UI_REFRESH" });
+      });
+    });
+  }
+});
 // ...existing code...
 // Background Service Worker for Touch Some Grass Extension
 

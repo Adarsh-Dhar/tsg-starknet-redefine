@@ -40,6 +40,29 @@ const IngestRealtimeSchema = z.object({
 });
 // --- HELPERS ---
 // In-memory session store (for dev only, not persistent!)
+// --- YOUTUBE SHORTS ACTIVITY TRACKING ---
+let globalUserStats = {
+    screenTimeMinutes: 0,
+    brainrotScore: 0,
+};
+router.post('/activity', async (req, res) => {
+    const { durationSeconds, address } = req.body;
+    if (typeof durationSeconds !== 'number' || !address) {
+        return res.status(400).json({ error: 'Missing durationSeconds or address' });
+    }
+    // Update stats
+    const minutes = durationSeconds / 60;
+    globalUserStats.screenTimeMinutes += minutes;
+    // Shorts have a higher "Brainrot" multiplier
+    globalUserStats.brainrotScore += minutes * 1.5;
+    res.status(200).json({
+        success: true,
+        stats: globalUserStats
+    });
+});
+router.get('/stats', (req, res) => {
+    res.status(200).json(globalUserStats);
+});
 const _sessionStore = {};
 const _baselineStore = {};
 async function getUserSession(walletAddress) {

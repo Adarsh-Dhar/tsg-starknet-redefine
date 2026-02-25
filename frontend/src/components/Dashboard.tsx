@@ -2,10 +2,18 @@ import React from 'react';
 import { useAccount } from "@starknet-react/core";
 import { AlertCircle, Clock, Zap, Wallet, CheckCircle2 } from 'lucide-react';
 
-interface DashboardProps { screenTime: number; dailyGoal: number; percentage: number; }
+interface DashboardProps {
+  screenTime: number;
+  dailyGoal: number;
+  percentage: number;
+  syncAddress?: string | null;
+}
 
-export default function Dashboard({ screenTime, dailyGoal, percentage }: DashboardProps) {
-  const { isConnected, status } = useAccount();
+export default function Dashboard({ screenTime, dailyGoal, percentage, syncAddress }: DashboardProps) {
+  const { isConnected: directConnected, status } = useAccount();
+
+  // Logic: Show dashboard if directly connected OR if we have a synced address from the web tab
+  const isActuallyConnected = directConnected || !!syncAddress;
 
   const handleConnect = () => {
     // Open the full web DApp to handle wallet injection
@@ -14,7 +22,7 @@ export default function Dashboard({ screenTime, dailyGoal, percentage }: Dashboa
 
   if (status === "connecting") return <div className="p-12 text-center text-emerald-500 animate-pulse">Initializing Neural Link...</div>;
 
-  if (!isConnected) {
+  if (!isActuallyConnected) {
     return (
       <div className="glass-effect rounded-2xl p-12 flex flex-col items-center border border-rose-500/20">
         <AlertCircle className="w-12 h-12 text-rose-500 mb-4 opacity-50" />

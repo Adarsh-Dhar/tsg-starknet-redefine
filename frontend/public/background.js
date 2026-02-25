@@ -1,18 +1,23 @@
 chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => {
-  console.log("📥 External Sync Message Received");
-
   if (request.type === "WALLET_SYNC") {
-    chrome.storage.local.set({
+    console.log("📥 External Sync Message Received");
+    const dataToSave = {
       starknet_address: request.address,
       starknet_pubkey: request.pubKey,
-      is_connected: true
-    }, () => {
-      // 1. Tell any open internal UI (Sidebar) to refresh NOW
-      chrome.runtime.sendMessage({ type: "UI_REFRESH" });
-      // 2. Acknowledge the web tab
-      sendResponse({ success: true });
+      is_connected: true,
+      last_sync: Date.now()
+    };
+    chrome.storage.local.set(dataToSave, () => {
+      if (chrome.runtime.lastError) {
+        console.error("❌ Storage Error:", chrome.runtime.lastError);
+        sendResponse({ success: false, error: chrome.runtime.lastError.message });
+      } else {
+        console.log("💾 Wallet saved to extension storage");
+        chrome.runtime.sendMessage({ type: "UI_REFRESH" });
+        sendResponse({ success: true });
+      }
     });
-    return true; // Keep channel open for async set callback
+    return true; // Keep channel open for async response
   }
 });
 // Listen for messages from the web DApp (localhost:5173)
@@ -23,27 +28,7 @@ chrome.sidePanel
 
 
 chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => {
-  if (request.type === "WALLET_SYNC") {
-    console.log("\uD83D\uDCE5 Received external message from:", sender.url);
-    const dataToSave = {
-      starknet_address: request.address,
-      starknet_pubkey: request.pubKey,
-      is_connected: true,
-      last_sync: Date.now()
-    };
-    chrome.storage.local.set(dataToSave, () => {
-      if (chrome.runtime.lastError) {
-        console.error("\u274C Storage Error:", chrome.runtime.lastError);
-        sendResponse({ success: false, error: chrome.runtime.lastError.message });
-      } else {
-        console.log("\uD83D\uDCBE Wallet saved to extension storage");
-        // Notify any open UI (Sidebar/Popup) to refresh immediately
-        chrome.runtime.sendMessage({ type: "UI_REFRESH" });
-        sendResponse({ success: true });
-      }
-    });
-    return true; // Keep channel open for async response
-  }
+  // Duplicate WALLET_SYNC handler removed; unified above
   // Sign Transaction bridge
   if (request.type === "SIGN_TX") {
     // Save tx request to storage for sidebar to pick up

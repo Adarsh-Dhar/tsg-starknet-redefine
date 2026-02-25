@@ -52,51 +52,30 @@ function AppContent() {
   const [txStatus, setTxStatus] = useState<string | null>(null);
 
   // Function to pull data from storage without refreshing the whole app
-  const loadStoredData = () => {
+  const loadData = () => {
     if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-      chrome.storage.local.get(['starknet_address', 'tx_status'], (res) => {
-        if (res.starknet_address) {
-          console.log("App: Loaded address", res.starknet_address);
-          setSyncAddress(res.starknet_address as string);
+      chrome.storage.local.get(['starknet_address'], (res) => {
+        if (typeof res.starknet_address === 'string' && res.starknet_address.length > 0) {
+          console.log("App: Synced address found:", res.starknet_address);
+          setSyncAddress(res.starknet_address);
+        } else {
+          setSyncAddress(null);
         }
-        if (res.tx_status) setTxStatus(res.tx_status as string);
       });
     }
   };
 
   // 2. Handle Message Passing & UI Refresh
   useEffect(() => {
-    // Check if we are in an extension context
-    const isExtension = typeof chrome !== 'undefined' && chrome.runtime?.onMessage;
-
-    if (isExtension) {
-      const messageListener = (msg: any, sender: any, sendResponse: any) => {
-        // Handle UI Refresh request from background script
+    if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
+      const listener = (msg: any) => {
         if (msg.type === "UI_REFRESH") {
-          console.log("App: Received refresh signal from background");
-          loadStoredData();
-        }
-
-        // Handle Transaction execution (only if in web tab context)
-        if (msg.type === 'EXECUTE_TX' && window.starknet?.account) {
-          window.starknet.account.execute(msg.tx)
-            .then(({ transaction_hash }) => {
-              chrome.storage.local.set({ tx_status: 'success' });
-              sendResponse({ success: true, transaction_hash });
-            })
-            .catch((e) => {
-              console.error("Tx failed", e);
-              chrome.storage.local.set({ tx_status: 'fail' });
-              sendResponse({ success: false });
-            });
-          return true; // Keep channel open for async response
+          loadData(); // Update local state immediately
         }
       };
-
-      chrome.runtime.onMessage.addListener(messageListener);
-      loadStoredData(); // Initial load
-
-      return () => chrome.runtime.onMessage.removeListener(messageListener);
+      chrome.runtime.onMessage.addListener(listener);
+      loadData(); // Initial check
+      return () => chrome.runtime.onMessage.removeListener(listener);
     }
   }, []);
 
@@ -155,7 +134,7 @@ function AppContent() {
 
       <main className="max-w-7xl mx-auto px-4 py-6">
         <Routes>
-          <Route path="/" element={<Dashboard screenTime={120} dailyGoal={180} percentage={66} />} />
+          <Route path="/" element={<Dashboard syncAddress={syncAddress} screenTime={120} dailyGoal={180} percentage={66} />} />
           <Route path="/leaderboard" element={<LeaderboardPage />} />
           <Route path="/insights" element={<InsightsPage screenTime={120} dailyGoal={180} />} />
           <Route path="/wallet" element={<WalletPage />} />

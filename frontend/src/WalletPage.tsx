@@ -20,25 +20,21 @@ export default function WalletPage() {
   useEffect(() => {
     const syncWithExtension = async () => {
       if (isConnected && address && account) {
-        const pubKey = await account.signer.getPubKey();
-        const extensionId = "YOUR_EXTENSION_ID_HERE"; // Replace with your actual extension ID
+        const pk = await account.signer.getPubKey();
+        // REPLACE THIS with your actual Extension ID from chrome://extensions
+        const EXTENSION_ID = "YOUR_EXTENSION_ID_HERE";
 
-        // 1. Try to send message directly to extension
-        if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
-          chrome.runtime.sendMessage(extensionId, {
+        if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+          chrome.runtime.sendMessage(EXTENSION_ID, {
             type: "WALLET_CONNECTED",
             address: address,
-            pubKey: pubKey
+            pubKey: pk
           }, (response) => {
-            console.log("Extension notified:", response);
-          });
-        }
-
-        // 2. Backup: Still save to storage
-        if (typeof chrome !== 'undefined' && chrome.storage) {
-          chrome.storage.local.set({
-            starknet_address: address,
-            starknet_pubkey: pubKey
+            if (chrome.runtime.lastError) {
+              console.error("Connection failed. Check Extension ID:", chrome.runtime.lastError);
+            } else {
+              console.log("Extension notified successfully!");
+            }
           });
         }
       }

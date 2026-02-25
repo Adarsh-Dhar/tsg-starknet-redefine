@@ -42,13 +42,13 @@ function AppContent() {
       });
 
       // 2. Correctly typed listener for storage changes
-      const listener = (changes: { [key: string]: chrome.storage.StorageChange }, areaName: string) => {
+      const listener = (
+        changes: { [key: string]: chrome.storage.StorageChange },
+        areaName: string
+      ) => {
         if (areaName === 'local' && changes.starknet_address) {
-          const newAddr = changes.starknet_address.newValue;
-          setSyncAddress(newAddr as string);
-          
-          // If the popup is open, we reload to ensure all Starknet hooks refresh their state
-          // based on the new account info saved in the background
+          setSyncAddress(changes.starknet_address.newValue as string);
+          // Optional: Refresh the popup to update Starknet hooks
           window.location.reload();
         }
       };

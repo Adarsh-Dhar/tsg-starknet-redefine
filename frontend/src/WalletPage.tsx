@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-  const [copied, setCopied] = useState(false);
 import { GRAVITY_VAULT_ABI } from './abi';
 import { Wallet, ArrowUpRight, ArrowDownLeft, ExternalLink } from 'lucide-react';
 import { useAccount, useConnect, useDisconnect } from "@starknet-react/core";
@@ -10,6 +9,7 @@ const VAULT_ADDRESS = "0x0602c5436e8dc621d2003f478d141a76b27571d29064fbb9786ad21
 const STRK_TOKEN_ADDRESS = "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
 
 export default function WalletPage() {
+    const [copied, setCopied] = useState(false);
   const { address, account, isConnected } = useAccount();
   const { connect, connectors } = useConnect();
   const { disconnect } = useDisconnect();

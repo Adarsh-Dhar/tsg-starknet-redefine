@@ -1,6 +1,7 @@
 // frontend/src/components/Dashboard.tsx
 
 import { useAccount, useConnect } from "@starknet-react/core";
+import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CheckCircle2, AlertCircle, Clock, Zap, Wallet } from 'lucide-react';
 
@@ -20,7 +21,14 @@ const formatTime = (minutes: number): string => {
 export default function Dashboard({ screenTime, dailyGoal, percentage }: DashboardProps) {
   const { isConnected, status } = useAccount();
   const { connect, connectors } = useConnect();
-  const navigate = useNavigate(); // Initialize navigation
+  const navigate = useNavigate();
+
+  // Redirect to wallet page ONLY after connection is successful
+  useEffect(() => {
+    if (isConnected) {
+      navigate('/wallet');
+    }
+  }, [isConnected, navigate]);
 
   if (status === "connecting") {
     return (
@@ -40,15 +48,11 @@ export default function Dashboard({ screenTime, dailyGoal, percentage }: Dashboa
           Connection Required
           <p className="text-xs font-normal text-rose-400/60 mt-2">Please connect your Starknet wallet to view metrics</p>
         </div>
-        
         <div className="flex flex-col gap-3 w-full max-w-xs">
           {connectors.map((connector) => (
             <button
               key={connector.id}
-              onClick={async () => {
-                await connect({ connector });
-                navigate('/wallet');
-              }}
+              onClick={() => connect({ connector })}
               className="flex items-center justify-center gap-3 px-6 py-3 rounded-xl bg-emerald-500 text-slate-900 font-bold hover:bg-emerald-400 transition-all active:scale-95 shadow-lg shadow-emerald-500/20"
             >
               <Wallet className="w-5 h-5" />

@@ -65,33 +65,40 @@ function AppContent() {
   const [brainrotScore, setBrainrotScore] = useState<number>(0);
   const [syncAddress, setSyncAddress] = useState<string | null>(null);
 
-  const loadStats = () => {
-    if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-      chrome.storage.local.get(['realtime_stats', 'starknet_address'], (res) => {
-        if (res.starknet_address) setSyncAddress(res.starknet_address as string);
-
-        // Directly extract and set the raw brainrot score
-        const stats = res.realtime_stats as { brainrotScore: number } | undefined;
-        if (stats && typeof stats.brainrotScore === 'number') {
-          console.log("🔥 Latest Brainrot Score:", stats.brainrotScore);
-          setBrainrotScore(stats.brainrotScore);
-        }
-      });
-    }
-  };
-
   useEffect(() => {
+    const loadStats = () => {
+      if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+        chrome.storage.local.get(['realtime_stats', 'starknet_address'], (res) => {
+          if (res.starknet_address) setSyncAddress(res.starknet_address as string);
+          const stats = res.realtime_stats as { brainrotScore: number } | undefined;
+          if (stats && typeof stats.brainrotScore === 'number') {
+            setBrainrotScore(stats.brainrotScore);
+          }
+        });
+      }
+    };
+
+    // Load immediately on mount
+    loadStats();
+
+    // Poll every second — scores update continuously without waiting for messages
+    const intervalId = setInterval(loadStats, 1000);
+
+    // Still listen for background push messages as a fast path
+    const listener = (msg: any) => {
+      if (msg.type === "UI_REFRESH") loadStats();
+    };
     if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
-      const listener = (msg: any) => {
-        if (msg.type === "UI_REFRESH") {
-          loadStats();
-        }
-      };
       chrome.runtime.onMessage.addListener(listener);
-      loadStats();
-      return () => chrome.runtime.onMessage.removeListener(listener);
     }
-  }, []);
+
+    return () => {
+      clearInterval(intervalId);
+      if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
+        chrome.runtime.onMessage.removeListener(listener);
+      }
+    };
+  }, []); // empty deps — loadStats is defined inside, no closure risk
 
   return (
     <Routes>

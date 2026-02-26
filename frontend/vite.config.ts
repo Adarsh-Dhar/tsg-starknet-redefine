@@ -31,5 +31,8 @@ export default defineConfig({
         },
       },
     },
+    emptyOutDir: false,
   },
+  // Ensure manifest.json is copied to dist
+  publicDir: 'public',
 })

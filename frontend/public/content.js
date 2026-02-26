@@ -1,97 +1,91 @@
+(function () {
+  // Prevent duplicate execution across navigations or multiple injections
+  if (window.__TSG_CONTENT_RUNNING) return;
+  window.__TSG_CONTENT_RUNNING = true;
 
-(function() {
-  // 1. Initial check: If context is already dead, don't even start.
-  if (typeof chrome === "undefined") return;
-  try {
-    if (!chrome.runtime || !chrome.runtime.id) return;
-  } catch (e) {
+  // --- Context validity check ---
+  const isContextValid = () => {
+    try {
+      return !!(chrome && chrome.runtime && chrome.runtime.id);
+    } catch (e) {
+      return false;
+    }
+  };
+
+  // Bail immediately if context is already gone
+  if (!isContextValid()) {
+    window.__TSG_CONTENT_RUNNING = false;
     return;
   }
 
-  let isScriptValid = true;
+  let isAlive = true;
   let startTime = Date.now();
-  let reportTimeout = null;
-  let extensionInvalidated = false;
+  let timerId = null;
 
-  const invalidateScript = () => {
-    if (!extensionInvalidated) {
-      console.warn('Extension context invalidated. Script disabled.');
+  // Single cleanup function — clears the one timer and resets the guard
+  const killScript = () => {
+    if (!isAlive) return; // already dead, don't run twice
+    isAlive = false;
+    window.__TSG_CONTENT_RUNNING = false;
+    if (timerId) {
+      clearTimeout(timerId);
+      timerId = null;
     }
-    isScriptValid = false;
-    extensionInvalidated = true;
-    if (reportTimeout) clearTimeout(reportTimeout);
-    window.removeEventListener('visibilitychange', handleVisibilityChange);
+    window.removeEventListener('error', globalErrorHandler);
+    console.warn("TSG: Content script stopped (context invalidated or extension reloaded).");
   };
 
-  const report = () => {
-    // 2. Fail-safe: Exit if marked invalid or runtime is gone
-    if (!isScriptValid || extensionInvalidated) {
-      return;
+  // Catch any uncaught "Extension context invalidated" errors bubbling up
+  const globalErrorHandler = (event) => {
+    if (
+      event &&
+      event.error &&
+      event.error.message &&
+      event.error.message.includes('Extension context invalidated')
+    ) {
+      killScript();
     }
-    if (typeof chrome === "undefined") {
-      invalidateScript();
-      return;
-    }
-    try {
-      if (!chrome.runtime || !chrome.runtime.id) {
-        invalidateScript();
-        return;
-      }
-    } catch (e) {
-      invalidateScript();
+  };
+  window.addEventListener('error', globalErrorHandler);
+
+  // --- Port connection for reporting loop ---
+  let port = null;
+  try {
+    port = chrome.runtime.connect({ name: "content-keepalive" });
+  } catch (e) {
+    killScript();
+    return;
+  }
+
+  // If the port disconnects (background reload), kill the script immediately
+  if (port) {
+    port.onDisconnect.addListener(() => {
+      killScript();
+    });
+  }
+
+  const reportActivity = () => {
+    if (!isAlive || !isContextValid() || !port) {
+      killScript();
       return;
     }
 
     const duration = Math.floor((Date.now() - startTime) / 1000);
-    
+
     if (window.location.href.includes('/shorts/') && duration > 5) {
       try {
-        chrome.runtime.sendMessage({ 
-          type: "YOUTUBE_ACTIVITY", 
-          duration 
-        }, () => {
-          // 3. Check for lastError immediately in the callback
-          if (chrome.runtime.lastError && chrome.runtime.lastError.message && chrome.runtime.lastError.message.includes('Extension context invalidated')) {
-            invalidateScript();
-            return;
-          } else if (chrome.runtime.lastError) {
-            // Other errors: log and invalidate
-            console.warn('Extension error:', chrome.runtime.lastError);
-            invalidateScript();
-            return;
-          }
-        });
-        console.log(`📊 Brainrot reported: ${duration}s`);
-      } catch (err) {
-        // This catches the specific "Extension context invalidated" exception
-        if (err && err.message && err.message.includes('Extension context invalidated')) {
-          invalidateScript();
-          return;
-        }
-        // Other errors: log and invalidate
-        console.warn('Extension error:', err);
-        invalidateScript();
+        port.postMessage({ type: "YOUTUBE_ACTIVITY", duration });
+      } catch (e) {
+        killScript();
         return;
       }
     }
 
     startTime = Date.now();
-    
-    // 4. Schedule next check only if still healthy
-    if (isScriptValid) {
-      reportTimeout = setTimeout(report, 10000);
+    if (isAlive) {
+      timerId = setTimeout(reportActivity, 10000);
     }
   };
 
-  const handleVisibilityChange = () => {
-    if (document.visibilityState === 'hidden' && isScriptValid) {
-      report();
-    }
-  };
-
-  // Start the loop
-  reportTimeout = setTimeout(report, 10000);
-
-  // Use a named function so we can remove it on invalidation
-  window.addEventListener('visibilitychange', handleVisibilityChange);
+  timerId = setTimeout(reportActivity, 10000);
 })();

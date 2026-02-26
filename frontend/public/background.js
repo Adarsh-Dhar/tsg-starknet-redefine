@@ -1,3 +1,42 @@
+// Accept port connections from content scripts for keepalive and activity relay
+chrome.runtime.onConnect.addListener((port) => {
+  if (port.name !== "content-keepalive") return;
+
+  port.onMessage.addListener((msg) => {
+    if (msg.type === "YOUTUBE_ACTIVITY") {
+      // handle exactly as you did with onMessage before
+      chrome.storage.local.get(['starknet_address', 'screenTime'], async (res) => {
+        // Always update local time first
+        const currentLocal = res.screenTime || 0;
+        const newLocal = currentLocal + (msg.duration / 60);
+        chrome.storage.local.set({ screenTime: newLocal });
+
+        if (res.starknet_address) {
+          try {
+            const response = await fetch('http://localhost:3333/api/data/activity', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ durationSeconds: msg.duration, address: res.starknet_address })
+            });
+            if (!response.ok) throw new Error("Server Error");
+            const data = await response.json();
+            if (data.success) {
+              chrome.storage.local.set({ 
+                realtime_stats: data.stats,
+                sync_error: null // Clear previous errors
+              });
+            }
+          } catch (err) {
+            chrome.storage.local.set({ sync_error: "Backend node offline. Stats may be delayed." });
+          }
+        }
+        chrome.runtime.sendMessage({ type: "UI_REFRESH" });
+      });
+    }
+  });
+
+  port.onDisconnect.addListener(() => {});
+});
 // Unified External Listener
 chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => {
   console.log("📥 External Message:", request.type);
@@ -60,38 +99,33 @@ chrome.sidePanel
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "YOUTUBE_ACTIVITY") {
     chrome.storage.local.get(['starknet_address', 'screenTime'], async (res) => {
-      // 1. Always update local backup first
+      // Always update local time first
       const currentLocal = res.screenTime || 0;
       const newLocal = currentLocal + (message.duration / 60);
       chrome.storage.local.set({ screenTime: newLocal });
-      // 2. Attempt server sync if address exists
+
       if (res.starknet_address) {
         try {
           const response = await fetch('http://localhost:3333/api/data/activity', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              durationSeconds: message.duration,
-              address: res.starknet_address
-            })
+            body: JSON.stringify({ durationSeconds: message.duration, address: res.starknet_address })
           });
+          
+          if (!response.ok) throw new Error("Server Error");
+          
           const data = await response.json();
-            if (data.success) {
-              // Ensure the object looks exactly like this:
-              // { brainrotScore: 12.5, screenTimeMinutes: 5 }
-              const stats = {
-                brainrotScore: data.stats?.brainrotScore ?? 0,
-                screenTimeMinutes: data.stats?.screenTimeMinutes ?? 0
-              };
-              chrome.storage.local.set({ realtime_stats: stats }, () => {
-                chrome.runtime.sendMessage({ type: "UI_REFRESH" });
-              });
-            }
+          if (data.success) {
+            chrome.storage.local.set({ 
+              realtime_stats: data.stats,
+              sync_error: null // Clear previous errors
+            });
+          }
         } catch (err) {
-          console.error("❌ Server Sync Failed:", err.message);
+          // Store the error so the frontend can show it
+          chrome.storage.local.set({ sync_error: "Backend node offline. Stats may be delayed." });
         }
       }
-      // 3. Notify UI to refresh regardless of server success
       chrome.runtime.sendMessage({ type: "UI_REFRESH" });
     });
   }

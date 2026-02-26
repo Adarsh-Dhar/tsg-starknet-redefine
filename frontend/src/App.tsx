@@ -94,70 +94,17 @@ function AppContent() {
   }, []);
 
   return (
-    <div className="h-full bg-slate-950 text-slate-200 font-sans">
-      <nav className="border-b border-emerald-500/10 bg-slate-900/50 backdrop-blur-md sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4">
-          <div className="flex justify-between h-16 items-center">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-emerald-500 rounded-lg flex items-center justify-center">
-                <span className="text-slate-900 font-bold">G</span>
-              </div>
-              <h1 className="text-xl font-bold text-emerald-400">Touch Grass</h1>
-            </div>
-            <div className="flex items-center gap-2">
-              {syncAddress && (
-                <div className="px-2 py-1 rounded bg-emerald-500/10 border border-emerald-500/20 text-[10px] text-emerald-400 font-mono">
-                  {syncAddress.slice(0, 6)}...{syncAddress.slice(-4)}
-                </div>
-              )}
-              {/* {txStatus && (
-                <div className={`px-2 py-1 rounded border text-[10px] font-mono ${
-                  txStatus === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-rose-500/10 border-rose-500/20 text-rose-400'
-                }`}>
-                  Tx: {txStatus}
-                </div>
-              )} */}
-            </div>
-          </div>
-          <div className="flex justify-around py-2 border-t border-emerald-500/5">
-            {[
-              { path: '/', icon: LayoutDashboard },
-              { path: '/leaderboard', icon: Trophy },
-              { path: '/insights', icon: Lightbulb },
-              { path: '/wallet', icon: WalletIcon },
-              { path: '/data', icon: DatabaseIcon },
-            ].map(({ path, icon: Icon }) => (
-              <Link
-                key={path}
-                to={path}
-                className={`p-2 rounded-lg transition-colors ${
-                  location.pathname === path 
-                    ? 'text-emerald-400 bg-emerald-500/10' 
-                    : 'text-slate-400 hover:text-emerald-300'
-                }`}
-              >
-                <Icon className="w-5 h-5" />
-              </Link>
-            ))}
-          </div>
-        </div>
-      </nav>
-
-      <main className="max-w-7xl mx-auto px-4 py-6">
-        <Routes>
-          <Route path="/" element={
-            <Dashboard 
-              syncAddress={syncAddress}
-              brainrotScore={brainrotScore} 
-            />
-          } />
-          <Route path="/leaderboard" element={<LeaderboardPage />} />
-          {/* <Route path="/insights" element={<InsightsPage screenTime={screenTime}dailyGoal={180} />} /> */}
-          <Route path="/wallet" element={<WalletPage />} />
-          <Route path="/data" element={<DataPage />} />
-        </Routes>
-      </main>
-    </div>
+    <Routes>
+      <Route path="/" element={
+        <Dashboard 
+          syncAddress={syncAddress}
+          brainrotScore={brainrotScore} 
+        />
+      } />
+      <Route path="/leaderboard" element={<LeaderboardPage />} />
+      <Route path="/wallet" element={<WalletPage />} />
+      <Route path="/data" element={<DataPage />} />
+    </Routes>
   );
 }
 

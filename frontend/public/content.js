@@ -1,19 +1,44 @@
 
-
 (function() {
-  // Check if we are already in a dead context before starting
-  if (typeof chrome === "undefined" || !chrome.runtime?.id) return;
+  // 1. Initial check: If context is already dead, don't even start.
+  if (typeof chrome === "undefined") return;
+  try {
+    if (!chrome.runtime || !chrome.runtime.id) return;
+  } catch (e) {
+    return;
+  }
 
   let isScriptValid = true;
   let startTime = Date.now();
+  let reportTimeout = null;
+  let extensionInvalidated = false;
+
+  const invalidateScript = () => {
+    if (!extensionInvalidated) {
+      console.warn('Extension context invalidated. Script disabled.');
+    }
+    isScriptValid = false;
+    extensionInvalidated = true;
+    if (reportTimeout) clearTimeout(reportTimeout);
+    window.removeEventListener('visibilitychange', handleVisibilityChange);
+  };
 
   const report = () => {
-    // Fail-safe: If the script is marked invalid, do nothing
-    if (!isScriptValid) return;
-
-    // Check if the runtime is still valid
-    if (typeof chrome === "undefined" || !chrome.runtime?.id) {
-      isScriptValid = false;
+    // 2. Fail-safe: Exit if marked invalid or runtime is gone
+    if (!isScriptValid || extensionInvalidated) {
+      return;
+    }
+    if (typeof chrome === "undefined") {
+      invalidateScript();
+      return;
+    }
+    try {
+      if (!chrome.runtime || !chrome.runtime.id) {
+        invalidateScript();
+        return;
+      }
+    } catch (e) {
+      invalidateScript();
       return;
     }
 
@@ -25,33 +50,48 @@
           type: "YOUTUBE_ACTIVITY", 
           duration 
         }, () => {
-          // Detect invalidation via the response callback
-          if (chrome.runtime.lastError) {
-            isScriptValid = false;
+          // 3. Check for lastError immediately in the callback
+          if (chrome.runtime.lastError && chrome.runtime.lastError.message && chrome.runtime.lastError.message.includes('Extension context invalidated')) {
+            invalidateScript();
+            return;
+          } else if (chrome.runtime.lastError) {
+            // Other errors: log and invalidate
+            console.warn('Extension error:', chrome.runtime.lastError);
+            invalidateScript();
+            return;
           }
         });
         console.log(`📊 Brainrot reported: ${duration}s`);
       } catch (err) {
-        // Catch the "Extension context invalidated" error
-        isScriptValid = false;
+        // This catches the specific "Extension context invalidated" exception
+        if (err && err.message && err.message.includes('Extension context invalidated')) {
+          invalidateScript();
+          return;
+        }
+        // Other errors: log and invalidate
+        console.warn('Extension error:', err);
+        invalidateScript();
+        return;
       }
     }
 
     startTime = Date.now();
     
-    // Only schedule the next check if the script is still valid
+    // 4. Schedule next check only if still healthy
     if (isScriptValid) {
-      setTimeout(report, 10000);
+      reportTimeout = setTimeout(report, 10000);
+    }
+  };
+
+  const handleVisibilityChange = () => {
+    if (document.visibilityState === 'hidden' && isScriptValid) {
+      report();
     }
   };
 
   // Start the loop
-  setTimeout(report, 10000);
+  reportTimeout = setTimeout(report, 10000);
 
-  // Safety for tab closing
-  window.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden' && isScriptValid) {
-      report();
-    }
-  });
+  // Use a named function so we can remove it on invalidation
+  window.addEventListener('visibilitychange', handleVisibilityChange);
 })();

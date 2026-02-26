@@ -1,3 +1,6 @@
+// LOUD log and alert to confirm content script injection
+console.log("!!! TSG CONTENT SCRIPT TRIGGERED !!!");
+alert("Content Script Active");
 (function () {
   // Prevent duplicate execution across navigations or multiple injections
   if (window.__TSG_CONTENT_RUNNING) return;

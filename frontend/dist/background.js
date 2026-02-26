@@ -4,31 +4,45 @@ chrome.runtime.onConnect.addListener((port) => {
 
   port.onMessage.addListener((msg) => {
     if (msg.type === "YOUTUBE_ACTIVITY") {
-      // handle exactly as you did with onMessage before
+      console.log("TSG DEBUG: Received activity from Content Script", msg);
+
       chrome.storage.local.get(['starknet_address', 'screenTime'], async (res) => {
-        // Always update local time first
+        // Log current state
+        console.log("TSG DEBUG: Current Storage State", {
+          address: res.starknet_address,
+          currentScreenTime: res.screenTime
+        });
+
         const currentLocal = res.screenTime || 0;
         const newLocal = currentLocal + (msg.duration / 60);
         chrome.storage.local.set({ screenTime: newLocal });
 
         if (res.starknet_address) {
           try {
+            console.log("TSG DEBUG: Attempting Backend Sync...");
             const response = await fetch('http://localhost:3333/api/data/activity', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ durationSeconds: msg.duration, address: res.starknet_address })
             });
-            if (!response.ok) throw new Error("Server Error");
+            if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
             const data = await response.json();
+            console.log("TSG DEBUG: Backend Response Success", data);
+
             if (data.success) {
-              chrome.storage.local.set({ 
+              chrome.storage.local.set({
                 realtime_stats: data.stats,
-                sync_error: null // Clear previous errors
+                sync_error: null
+              }, () => {
+                console.log("TSG DEBUG: Storage updated with new Brainrot Score:", data.stats.brainrotScore);
               });
             }
           } catch (err) {
-            chrome.storage.local.set({ sync_error: "Backend node offline. Stats may be delayed." });
+            console.error("TSG DEBUG: Sync Failed", err.message);
+            chrome.storage.local.set({ sync_error: "Backend node offline." });
           }
+        } else {
+          console.warn("TSG DEBUG: No Starknet address found. Skipping backend sync.");
         }
         chrome.runtime.sendMessage({ type: "UI_REFRESH" });
       });

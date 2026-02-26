@@ -147,11 +147,16 @@ router.post('/ingest/realtime', dataRateLimiter, async (req, res) => {
             scoreDelta *= 3;
         session.score += scoreDelta;
         session.lastUpdate = now;
+        // FIX: Sync globalUserStats with session
+        globalUserStats.brainrotScore = session.score;
+        globalUserStats.screenTimeMinutes += (duration / 60);
         let slashed = false;
         if (session.score >= 100) {
             await slashQueue.add('execute-penalty', { walletAddress, score: session.score });
             session.score = 0;
             slashed = true;
+            // Reset global stats if slashed
+            globalUserStats.brainrotScore = 0;
         }
         await setUserSession(walletAddress, session);
         return res.json({ success: true, score: session.score, slashed, category });

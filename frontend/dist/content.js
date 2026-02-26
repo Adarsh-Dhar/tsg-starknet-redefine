@@ -1,7 +1,11 @@
 // LOUD log and alert to confirm content script injection
 console.log("!!! TSG CONTENT SCRIPT TRIGGERED !!!");
 alert("Content Script Active");
+// LOUD log and alert to confirm content script injection
+console.log("!!! TSG CONTENT SCRIPT TRIGGERED !!!");
+alert("Content Script Active");
 (function () {
+  console.log("!!! TSG CONTENT SCRIPT ACTIVE !!!"); // Heartbeat log for YouTube console
   // Prevent duplicate execution across navigations or multiple injections
   if (window.__TSG_CONTENT_RUNNING) return;
   window.__TSG_CONTENT_RUNNING = true;
@@ -74,10 +78,14 @@ alert("Content Script Active");
     }
 
     const duration = Math.floor((Date.now() - startTime) / 1000);
+    // Heartbeat log for every check
+    console.log(`TSG: Checking... URL: ${window.location.pathname}, Duration: ${duration}s`);
 
-    if (window.location.href.includes('/shorts/') && duration > 5) {
+    // Lower threshold to 1s, log every report, and check every 5s
+    if (window.location.href.includes('/shorts/') && duration >= 1) {
       try {
         port.postMessage({ type: "YOUTUBE_ACTIVITY", duration });
+        console.log(`TSG: Reported ${duration}s of Shorts activity`);
       } catch (e) {
         killScript();
         return;
@@ -86,7 +94,7 @@ alert("Content Script Active");
 
     startTime = Date.now();
     if (isAlive) {
-      timerId = setTimeout(reportActivity, 10000);
+      timerId = setTimeout(reportActivity, 5000);
     }
   };
 

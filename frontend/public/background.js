@@ -1,3 +1,13 @@
+// --- YOUTUBE SHORTS NAVIGATION LISTENER ---
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (changeInfo.status === 'complete' && tab.url && tab.url.includes("youtube.com/shorts/")) {
+    console.log("TSG: Shorts navigation detected, injecting content script...");
+    chrome.scripting.executeScript({
+      target: { tabId: tabId },
+      files: ["content.js"]
+    }).catch(err => console.log("TSG: Script already running or injection failed:", err));
+  }
+});
 // Accept port connections from content scripts for keepalive and activity relay
 chrome.runtime.onConnect.addListener((port) => {
   if (port.name !== "content-keepalive") return;
@@ -217,10 +227,10 @@ setInterval(async () => {
   const newScreenTime = currentTime + 1;
 
   // Check if break notification is needed
-  if (newScreenTime - lastBreakTime >= breakInterval * 60 && newScreenTime > 0) {
+  if (newScreenTime - lastBreakTime >= breakInterval && newScreenTime > 0) {
     notifyBreakTime(newScreenTime, dailyGoal);
     await chrome.storage.local.set({
-      [STORAGE_KEYS.LAST_BREAK_TIME]: newScreenTime * 60,
+      [STORAGE_KEYS.LAST_BREAK_TIME]: newScreenTime,
     });
   }
 

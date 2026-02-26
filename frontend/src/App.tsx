@@ -48,11 +48,16 @@ export default function App() {
   // Determine if we are in extension mode (side panel)
   const [isExtension, setIsExtension] = useState(false);
   useEffect(() => {
-    // Check if the window width matches the side panel target
-    const checkMode = () => setIsExtension(window.innerWidth <= 450);
-    checkMode();
-    window.addEventListener('resize', checkMode);
-    return () => window.removeEventListener('resize', checkMode);
+    // Environment detection for Chrome Extension
+    if (window.location.protocol === 'chrome-extension:') {
+      setIsExtension(true);
+    } else {
+      // Fallback for side panel detection
+      const checkMode = () => setIsExtension(window.innerWidth <= 450);
+      checkMode();
+      window.addEventListener('resize', checkMode);
+      return () => window.removeEventListener('resize', checkMode);
+    }
   }, []);
 
   return (
@@ -64,7 +69,6 @@ export default function App() {
         <main className="flex-1 overflow-y-auto p-4 pb-24">
           <Routes>
             <Route path="/" element={<Dashboard brainrotScore={0} syncAddress={null} />} />
-            <Route path="/index.html" element={<Dashboard brainrotScore={0} syncAddress={null} />} />
             <Route path="/data" element={<DataPage />} />
             <Route path="/insights" element={<InsightsPage screenTime={0} dailyGoal={180} />} />
             <Route path="/wallet" element={<WalletPage />} />

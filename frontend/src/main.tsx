@@ -1,19 +1,19 @@
+// frontend/src/main.tsx
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'
-import { StarknetConfig, braavos, argent, voyager } from '@starknet-react/core';
-import { sepolia } from '@starknet-react/chains';
 import './index.css'
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <StarknetConfig
-      chains={[sepolia]}
-      connectors={[braavos(), argent()]}
-      explorer={voyager}
-      autoConnect
-    >
+const rootElement = document.getElementById('root');
+
+if (!rootElement) {
+  console.error("TSG: Root element not found");
+} else {
+  // Use a safer initialization check
+  const root = ReactDOM.createRoot(rootElement);
+  root.render(
+    <React.StrictMode>
       <App />
-    </StarknetConfig>
-  </React.StrictMode>,
-)
+    </React.StrictMode>
+  );
+}

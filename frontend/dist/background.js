@@ -54,7 +54,9 @@ chrome.runtime.onConnect.addListener((port) => {
         } else {
           console.warn("TSG DEBUG: No Starknet address found. Skipping backend sync.");
         }
-        chrome.runtime.sendMessage({ type: "UI_REFRESH" });
+        chrome.runtime.sendMessage({ type: "UI_REFRESH" }).catch(() => {
+          console.log("TSG DEBUG: UI not active, refresh skipped.");
+        });
       });
     }
   });
@@ -73,7 +75,9 @@ chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => 
       last_sync: Date.now()
     };
     chrome.storage.local.set(dataToSave, () => {
-      chrome.runtime.sendMessage({ type: "UI_REFRESH" });
+      chrome.runtime.sendMessage({ type: "UI_REFRESH" }).catch(() => {
+         console.log("TSG DEBUG: UI not active, refresh skipped.");
+      });
       sendResponse({ success: true });
     });
     return true;
@@ -150,7 +154,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           chrome.storage.local.set({ sync_error: "Backend node offline. Stats may be delayed." });
         }
       }
-      chrome.runtime.sendMessage({ type: "UI_REFRESH" });
+      chrome.runtime.sendMessage({ type: "UI_REFRESH" }).catch(() => {
+          console.log("TSG DEBUG: UI not active, refresh skipped.");
+      });
     });
   }
 });

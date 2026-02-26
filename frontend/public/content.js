@@ -1,9 +1,5 @@
 // LOUD log and alert to confirm content script injection
 console.log("!!! TSG CONTENT SCRIPT TRIGGERED !!!");
-alert("Content Script Active");
-// LOUD log and alert to confirm content script injection
-console.log("!!! TSG CONTENT SCRIPT TRIGGERED !!!");
-alert("Content Script Active");
 (function () {
   console.log("!!! TSG CONTENT SCRIPT ACTIVE !!!"); // Heartbeat log for YouTube console
   // Prevent duplicate execution across navigations or multiple injections

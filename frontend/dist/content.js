@@ -51,13 +51,23 @@
       console.log(`%c TSG: Reporting ${delta}s of brainrot... `, "color: #10b981; font-weight: bold;");
       try {
         port.postMessage({ type: "YOUTUBE_ACTIVITY", duration: delta });
+        startTime = Date.now();
       } catch (e) {
         console.error("TSG: Failed to postMessage. Attempting to reconnect...");
-        connect(); // Try to recover connection
+        connect();
+        // Try to resend once after reconnect
+        setTimeout(() => {
+          if (port) {
+            try {
+              port.postMessage({ type: "YOUTUBE_ACTIVITY", duration: delta });
+              startTime = Date.now();
+            } catch (err) {
+              console.error("TSG: Retry failed after reconnect.", err);
+            }
+          }
+        }, 500);
       }
-      startTime = Date.now();
     }
-    
     // Schedule next report
     setTimeout(reportActivity, 5000);
   };

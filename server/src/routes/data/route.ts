@@ -179,13 +179,22 @@ router.post('/ingest/realtime', dataRateLimiter, async (req: Request, res: Respo
     globalUserStats.brainrotScore = session.score;
     globalUserStats.screenTimeMinutes += (duration / 60);
 
+    // Milestone tracker for 100-point blocks
+    const _milestoneStore: Record<string, number> = global._milestoneStore || (global._milestoneStore = {});
+    const currentMilestone = Math.floor(session.score / 100);
+    const lastSlashedMilestone = _milestoneStore[walletAddress] || 0;
+
     let slashed = false;
-    if (session.score >= 100) {
-      await slashQueue.add('execute-penalty', { walletAddress, score: session.score });
-      session.score = 0; 
+    // Trigger if they crossed a new 100-point boundary (up to 10000 points/100x)
+    if (currentMilestone > lastSlashedMilestone && currentMilestone <= 100) {
+      const jumps = currentMilestone - lastSlashedMilestone;
+      const totalPenalty = jumps * 0.01;
+      await slashQueue.add('execute-penalty', {
+        walletAddress,
+        amount: totalPenalty
+      });
+      _milestoneStore[walletAddress] = currentMilestone;
       slashed = true;
-      // Reset global stats if slashed
-      globalUserStats.brainrotScore = 0;
     }
 
     await setUserSession(walletAddress, session);

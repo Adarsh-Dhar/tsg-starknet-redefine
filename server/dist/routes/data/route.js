@@ -53,8 +53,8 @@ router.post('/activity', async (req, res) => {
     // Update stats
     const minutes = durationSeconds / 60;
     globalUserStats.screenTimeMinutes += minutes;
-    // Increase multiplier for visible feedback during testing
-    globalUserStats.brainrotScore += minutes * 10;
+    // FIX: Higher multiplier for testing (e.g., 100 instead of 10)
+    globalUserStats.brainrotScore += minutes * 100;
     res.status(200).json({
         success: true,
         stats: globalUserStats
@@ -150,13 +150,21 @@ router.post('/ingest/realtime', dataRateLimiter, async (req, res) => {
         // FIX: Sync globalUserStats with session
         globalUserStats.brainrotScore = session.score;
         globalUserStats.screenTimeMinutes += (duration / 60);
+        // Milestone tracker for 100-point blocks
+        const _milestoneStore = global._milestoneStore || (global._milestoneStore = {});
+        const currentMilestone = Math.floor(session.score / 100);
+        const lastSlashedMilestone = _milestoneStore[walletAddress] || 0;
         let slashed = false;
-        if (session.score >= 100) {
-            await slashQueue.add('execute-penalty', { walletAddress, score: session.score });
-            session.score = 0;
+        // Trigger if they crossed a new 100-point boundary (up to 10000 points/100x)
+        if (currentMilestone > lastSlashedMilestone && currentMilestone <= 100) {
+            const jumps = currentMilestone - lastSlashedMilestone;
+            const totalPenalty = jumps * 0.01;
+            await slashQueue.add('execute-penalty', {
+                walletAddress,
+                amount: totalPenalty
+            });
+            _milestoneStore[walletAddress] = currentMilestone;
             slashed = true;
-            // Reset global stats if slashed
-            globalUserStats.brainrotScore = 0;
         }
         await setUserSession(walletAddress, session);
         return res.json({ success: true, score: session.score, slashed, category });

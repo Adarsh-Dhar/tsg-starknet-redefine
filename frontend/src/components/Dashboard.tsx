@@ -1,15 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { Zap, Flame, Brain, TrendingUp, AlertCircle, ExternalLink } from 'lucide-react';
+import { Zap, Flame, Brain, TrendingUp, AlertCircle, Lock, ExternalLink } from 'lucide-react';
 import Progress from './ui/progress'; //
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card'; //
 
 interface DashboardProps {
   brainrotScore: number;
   syncAddress: string | null;
+  delegatedAmount: number; // New prop: total STRK delegated by user
+  delegationTxHash?: string | null; // Optional: latest delegation tx hash
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ brainrotScore, syncAddress }) => {
+import { useNavigate } from 'react-router-dom';
+const Dashboard: React.FC<DashboardProps> = ({ brainrotScore, syncAddress, delegatedAmount, delegationTxHash }) => {
   const [displayScore, setDisplayScore] = useState(brainrotScore);
+  const navigate = useNavigate();
 
   // Neural Smoothing: Ticks the display score 1-by-1 to match actual data
   useEffect(() => {
@@ -24,6 +28,38 @@ const Dashboard: React.FC<DashboardProps> = ({ brainrotScore, syncAddress }) => 
       return () => clearTimeout(timer);
     }
   }, [brainrotScore, displayScore]);
+
+  // Requirement: Minimum 1 STRK delegated
+  if (delegatedAmount < 1) {
+    return (
+      <div className="flex flex-col items-center justify-center p-8 space-y-4 border border-rose-500/30 bg-rose-500/5 rounded-2xl backdrop-blur-md">
+        <Lock className="w-12 h-12 text-rose-500 animate-pulse" />
+        <h2 className="text-xl font-bold text-white text-center">Vault Locked</h2>
+        <p className="text-sm text-slate-400 text-center max-w-xs">
+          You must delegate at least 1 STRK to the vault to begin monitoring.
+        </p>
+        <a 
+          href="/wallet" 
+          className="px-6 py-2 bg-emerald-500 text-slate-900 rounded-lg font-bold hover:bg-emerald-400 transition-colors"
+        >
+          Delegate STRK
+        </a>
+        {delegationTxHash && (
+          <div className="mt-2 text-xs text-slate-400 text-center">
+            Last delegation tx:&nbsp;
+            <a
+              href={`https://starkscan.co/tx/${delegationTxHash}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-emerald-400 underline flex items-center gap-1"
+            >
+              {delegationTxHash.slice(0, 10)}...<ExternalLink size={14} />
+            </a>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   const getStatus = (score: number) => {
     if (score >= 8000) return { label: "Peak Brainrot", color: "text-red-500", icon: <Flame className="animate-pulse" /> };

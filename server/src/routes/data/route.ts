@@ -73,8 +73,8 @@ router.post('/activity', async (req: Request, res: Response) => {
   // Update stats
   const minutes = durationSeconds / 60;
   globalUserStats.screenTimeMinutes += minutes;
-  // Increase multiplier for visible feedback during testing
-  globalUserStats.brainrotScore += minutes * 10;
+    // FIX: Higher multiplier for testing (e.g., 100 instead of 10)
+    globalUserStats.brainrotScore += minutes * 100;
   res.status(200).json({
     success: true,
     stats: globalUserStats

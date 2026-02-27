@@ -126,11 +126,18 @@ chrome.sidePanel
 // --- YOUTUBE SHORTS ACTIVITY RELAY ---
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "YOUTUBE_ACTIVITY") {
-    chrome.storage.local.get(['starknet_address', 'screenTime'], async (res) => {
-      // Always update local time first
-      const currentLocal = res.screenTime || 0;
-      const newLocal = currentLocal + (message.duration / 60);
-      chrome.storage.local.set({ screenTime: newLocal });
+    chrome.storage.local.get(['realtime_stats', 'starknet_address'], async (res) => {
+      let stats = res.realtime_stats || { brainrotScore: 0, screenTimeMinutes: 0 };
+
+      // Calculate brainrot increase (roughly 8.3 points per 1 second of Shorts)
+      const increment = Math.floor((500 / 60) * message.duration);
+      stats.brainrotScore = Math.min(stats.brainrotScore + increment, 10000);
+      stats.screenTimeMinutes += (message.duration / 60);
+
+      chrome.storage.local.set({ realtime_stats: stats }, () => {
+        // Force UI refresh
+        chrome.runtime.sendMessage({ type: "UI_REFRESH" }).catch(() => {});
+      });
 
       if (res.starknet_address) {
         try {
@@ -139,28 +146,63 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ durationSeconds: message.duration, address: res.starknet_address })
           });
-          
           if (!response.ok) throw new Error("Server Error");
-          
           const data = await response.json();
           if (data.success) {
             chrome.storage.local.set({ 
               realtime_stats: data.stats,
               sync_error: null // Clear previous errors
+            }, () => {
+              chrome.runtime.sendMessage({ type: "UI_REFRESH" }).catch(() => {});
             });
           }
         } catch (err) {
-          // Store the error so the frontend can show it
           chrome.storage.local.set({ sync_error: "Backend node offline. Stats may be delayed." });
         }
       }
-      chrome.runtime.sendMessage({ type: "UI_REFRESH" }).catch(() => {
-          console.log("TSG DEBUG: UI not active, refresh skipped.");
+    });
+  }
+});
+// --- BRAINROT SCORE CONSTANTS ---
+const MAX_SCORE = 10000;
+const SCORE_INC = 500; // Increase per check while watching
+const SCORE_DEC = 200; // Decrease per check while away
+
+// Alarm to check activity every 1 minute
+chrome.alarms.create("brainrotTick", { periodInMinutes: 1 });
+
+chrome.alarms.onAlarm.addListener(async (alarm) => {
+  if (alarm.name === "brainrotTick") {
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    const isShorts = tabs[0]?.url?.includes("youtube.com/shorts/");
+
+    chrome.storage.local.get(['realtime_stats'], (res) => {
+      let stats = res.realtime_stats || { brainrotScore: 0, screenTimeMinutes: 0 };
+      
+      if (isShorts) {
+        stats.brainrotScore = Math.min(stats.brainrotScore + SCORE_INC, MAX_SCORE);
+        stats.screenTimeMinutes += 1;
+      } else {
+        stats.brainrotScore = Math.max(stats.brainrotScore - SCORE_DEC, 0);
+      }
+
+      chrome.storage.local.set({ realtime_stats: stats }, () => {
+        // Notify UI to refresh
+        chrome.runtime.sendMessage({ type: "UI_REFRESH" }).catch(() => {});
       });
     });
   }
 });
-// ...existing code...
+
+// Keep your existing tab navigation listener to ensure content script is ready
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (changeInfo.status === 'complete' && tab.url?.includes("youtube.com/shorts/")) {
+    chrome.scripting.executeScript({
+      target: { tabId: tabId },
+      files: ["content.js"]
+    }).catch(() => {});
+  }
+});
 // Background Service Worker for Touch Some Grass Extension
 
 

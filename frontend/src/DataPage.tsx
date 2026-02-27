@@ -25,29 +25,7 @@ export default function DataPage() {
 
   const apiBase = import.meta.env.VITE_API_BASE_URL || '/api';
 
-  // FIX 1: Move stats state to top level
-  const [stats, setStats] = useState({ brainrotScore: 0, screenTimeMinutes: 0 });
-  const [error, setError] = useState<string | null>(null);
-
-  // FIX 2: Move useEffect to top level
-  useEffect(() => {
-    const refreshFromStorage = () => {
-      chrome.storage.local.get(['realtime_stats', 'sync_error'], (res) => {
-        if (res.realtime_stats) setStats(res.realtime_stats as { brainrotScore: number; screenTimeMinutes: number });
-        if (res.sync_error) setError(res.sync_error as string);
-        else setError(null);
-      });
-    };
-    refreshFromStorage();
-    // Listen for storage changes from background.js
-    const listener = (changes: any) => {
-      if (changes.realtime_stats || changes.sync_error) {
-        refreshFromStorage();
-      }
-    };
-    chrome.storage.onChanged.addListener(listener);
-    return () => chrome.storage.onChanged.removeListener(listener);
-  }, []);
+  // ...existing code...
 
   // 1. Handle Batch Ingestion (POST /api/data/ingest)
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {

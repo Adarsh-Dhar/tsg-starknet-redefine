@@ -47,6 +47,10 @@ interface StorageResponse {
 export default function App() {
   // Determine if we are in extension mode (side panel)
   const [isExtension, setIsExtension] = useState(false);
+  // Global stats and sync address state
+  const [globalStats, setGlobalStats] = useState({ brainrotScore: 0, screenTimeMinutes: 0 });
+  const [syncAddress, setSyncAddress] = useState<string | null>(null);
+
   useEffect(() => {
     // Environment detection for Chrome Extension
     if (window.location.protocol === 'chrome-extension:') {
@@ -60,6 +64,19 @@ export default function App() {
     }
   }, []);
 
+  // Centralized chrome.storage listener for stats and address
+  useEffect(() => {
+    const refresh = () => {
+      chrome.storage.local.get(['realtime_stats', 'starknet_address'], (res) => {
+        if (res.realtime_stats) setGlobalStats(res.realtime_stats as RealtimeStats);
+        if (res.starknet_address) setSyncAddress(res.starknet_address as string);
+      });
+    };
+    refresh();
+    chrome.storage.onChanged.addListener(refresh);
+    return () => chrome.storage.onChanged.removeListener(refresh);
+  }, []);
+
   return (
     <Router>
       <div className={`min-h-screen bg-slate-950 text-emerald-50 flex flex-col ${
@@ -68,9 +85,10 @@ export default function App() {
         {/* Main Content Area */}
         <main className="flex-1 overflow-y-auto p-4 pb-24">
           <Routes>
-            <Route path="/" element={<Dashboard brainrotScore={0} syncAddress={null} />} />
+            {/* Pass actual stats and address to Dashboard */}
+            <Route path="/" element={<Dashboard brainrotScore={globalStats.brainrotScore} syncAddress={syncAddress} />} />
             <Route path="/data" element={<DataPage />} />
-            <Route path="/insights" element={<InsightsPage screenTime={0} dailyGoal={180} />} />
+            <Route path="/insights" element={<InsightsPage screenTime={globalStats.screenTimeMinutes} dailyGoal={180} />} />
             <Route path="/wallet" element={<WalletPage />} />
             <Route path="/leaderboard" element={<LeaderboardPage />} />
           </Routes>

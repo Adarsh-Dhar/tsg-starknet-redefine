@@ -273,13 +273,17 @@ function notifyBreakTime(screenTime, dailyGoal) {
   const hours = Math.floor(screenTime / 60);
   const minutes = screenTime % 60;
 
-  chrome.notifications.create('break-notification', {
-    type: 'basic',
-    iconUrl: '/icons/icon-128.png',
-    title: 'Time for a Break!',
-    message: `You've been using your device for ${hours}h ${minutes}m. Take a moment to touch some grass! 🌿`,
-    priority: 1,
-  });
+  if (chrome.notifications && typeof chrome.notifications.create === 'function') {
+    chrome.notifications.create('break-notification', {
+      type: 'basic',
+      iconUrl: '/icons/icon-128.png',
+      title: 'Time for a Break!',
+      message: `You've been using your device for ${hours}h ${minutes}m. Take a moment to touch some grass! 🌿`,
+      priority: 1,
+    });
+  } else {
+    console.warn('chrome.notifications API is not available. Cannot show break notification.');
+  }
 }
 
 // Send goal exceeded notification

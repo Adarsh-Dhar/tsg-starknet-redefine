@@ -73,15 +73,20 @@ console.log("!!! TSG CONTENT SCRIPT TRIGGERED !!!");
       return;
     }
 
-    const duration = Math.floor((Date.now() - startTime) / 1000);
+    // Use a cumulative sessionDuration buffer
+    if (typeof window.sessionDuration === 'undefined') {
+      window.sessionDuration = 0;
+    }
+    const delta = Math.floor((Date.now() - startTime) / 1000);
+    window.sessionDuration += delta;
     // Heartbeat log for every check
-    console.log(`TSG: Checking... URL: ${window.location.pathname}, Duration: ${duration}s`);
+    console.log(`TSG: Checking... URL: ${window.location.pathname}, Delta: ${delta}s, Session: ${window.sessionDuration}s`);
 
-    // Lower threshold to 1s, log every report, and check every 5s
-    if (window.location.href.includes('/shorts/') && duration >= 1) {
+    if (window.location.href.includes('/shorts/') && window.sessionDuration >= 5) {
       try {
-        port.postMessage({ type: "YOUTUBE_ACTIVITY", duration });
-        console.log(`TSG: Reported ${duration}s of Shorts activity`);
+        port.postMessage({ type: "YOUTUBE_ACTIVITY", duration: window.sessionDuration });
+        console.log(`TSG: Reported ${window.sessionDuration}s of Shorts activity`);
+        window.sessionDuration = 0; // Reset only after successful report
       } catch (e) {
         killScript();
         return;

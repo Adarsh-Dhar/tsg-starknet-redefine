@@ -1,21 +1,29 @@
+
 import React, { useState, useEffect } from 'react';
-import { Zap, Flame, Brain, TrendingUp, AlertCircle, Lock, ExternalLink } from 'lucide-react';
-import Progress from './ui/progress'; //
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card'; //
+import { useAccount, useBalance } from "@starknet-react/core";
+import WalletPage from '../WalletPage';
+import { Zap, Flame, Brain, TrendingUp, Lock } from 'lucide-react';
+import Progress from './ui/progress';
+import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
+
+const STRK_TOKEN_ADDRESS = "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
+const VAULT_ADDRESS = "0x0602c5436e8dc621d2003f478d141a76b27571d29064fbb9786ad21032eb4769";
 
 interface DashboardProps {
   brainrotScore: number;
   syncAddress: string | null;
-  delegatedAmount: number; // New prop: total STRK delegated by user
-  delegationTxHash?: string | null; // Optional: latest delegation tx hash
 }
 
-import { useNavigate } from 'react-router-dom';
-const Dashboard: React.FC<DashboardProps> = ({ brainrotScore, syncAddress, delegatedAmount, delegationTxHash }) => {
-  const [displayScore, setDisplayScore] = useState(brainrotScore);
-  const navigate = useNavigate();
+const Dashboard: React.FC<DashboardProps> = ({ brainrotScore, syncAddress }) => {
+  const { isConnected, address } = useAccount();
+  // Check for delegation balance in the vault
+  const { data: delegationBalance, isLoading } = useBalance({
+    address: address,
+    token: STRK_TOKEN_ADDRESS,
+    watch: true,
+  });
+  const [displayScore, setDisplayScore] = useState<number>(brainrotScore);
 
-  // Neural Smoothing: Ticks the display score 1-by-1 to match actual data
   useEffect(() => {
     if (displayScore !== brainrotScore) {
       const timer = setTimeout(() => {
@@ -24,49 +32,44 @@ const Dashboard: React.FC<DashboardProps> = ({ brainrotScore, syncAddress, deleg
           if (prev > brainrotScore) return prev - 1;
           return prev;
         });
-      }, 20); // Fast 20ms tick for real-time feel
+      }, 20);
       return () => clearTimeout(timer);
     }
   }, [brainrotScore, displayScore]);
 
-  // Requirement: Minimum 1 STRK delegated
-  if (delegatedAmount < 1) {
+  // --- GATE 1: Wallet Connection ---
+  if (!isConnected) {
     return (
-      <div className="flex flex-col items-center justify-center p-8 space-y-4 border border-rose-500/30 bg-rose-500/5 rounded-2xl backdrop-blur-md">
-        <Lock className="w-12 h-12 text-rose-500 animate-pulse" />
-        <h2 className="text-xl font-bold text-white text-center">Vault Locked</h2>
-        <p className="text-sm text-slate-400 text-center max-w-xs">
-          You must delegate at least 1 STRK to the vault to begin monitoring.
-        </p>
-        <a 
-          href="/wallet" 
-          className="px-6 py-2 bg-emerald-500 text-slate-900 rounded-lg font-bold hover:bg-emerald-400 transition-colors"
-        >
-          Delegate STRK
-        </a>
-        {delegationTxHash && (
-          <div className="mt-2 text-xs text-slate-400 text-center">
-            Last delegation tx:&nbsp;
-            <a
-              href={`https://starkscan.co/tx/${delegationTxHash}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-emerald-400 underline flex items-center gap-1"
-            >
-              {delegationTxHash.slice(0, 10)}...<ExternalLink size={14} />
-            </a>
-          </div>
-        )}
+      <div className="flex flex-col items-center justify-center p-10 space-y-6">
+        <h2 className="text-xl font-bold text-emerald-400">Connect to Start</h2>
+        <WalletPage minimal />
       </div>
     );
   }
 
+  // --- GATE 2: Delegation Check ---
+  const delegatedAmount = delegationBalance ? Number(delegationBalance.formatted) : 0;
+  if (delegatedAmount < 1) {
+    return (
+      <div className="max-w-md mx-auto p-8 rounded-2xl glass-effect border border-rose-500/30 bg-rose-900/10 text-center space-y-4">
+        <Lock className="w-12 h-12 text-rose-500 mx-auto animate-pulse" />
+        <h2 className="text-xl font-bold text-white">Minimum Delegation Required</h2>
+        <p className="text-sm text-slate-400">
+          You must delegate at least 1 STRK to the vault to unlock your Brainrot monitoring.
+        </p>
+        <div className="pt-4">
+          <WalletPage minimal />
+        </div>
+      </div>
+    );
+  }
+
+  // --- FINAL VIEW: Brainrot Score ---
   const getStatus = (score: number) => {
     if (score >= 8000) return { label: "Peak Brainrot", color: "text-red-500", icon: <Flame className="animate-pulse" /> };
     if (score >= 5000) return { label: "Doomscrolling", color: "text-orange-500", icon: <Zap className="animate-bounce" /> };
     return { label: "Mind Sharp", color: "text-emerald-400", icon: <Brain /> };
   };
-
   const status = getStatus(displayScore);
   const percentage = Math.min((displayScore / 10000) * 100, 100);
 
@@ -97,7 +100,6 @@ const Dashboard: React.FC<DashboardProps> = ({ brainrotScore, syncAddress, deleg
           </div>
         </CardContent>
       </Card>
-      {/* Wallet Sync UI remains same */}
     </div>
   );
 };

@@ -1,22 +1,31 @@
-// LOUD log and alert to confirm content script injection
-console.log("!!! TSG CONTENT SCRIPT TRIGGERED !!!");
+
+console.log("%c !!! TSG CONTENT SCRIPT TRIGGERED !!! ", "background: #10b981; color: white;");
+
+
 (function () {
-  console.log("!!! TSG CONTENT SCRIPT ACTIVE !!!"); // Heartbeat log for YouTube console
-  // Prevent duplicate execution across navigations or multiple injections
-  if (window.__TSG_CONTENT_RUNNING) return;
+  // If already running, clean up previous instance before re-injecting
+  if (window.__TSG_CONTENT_RUNNING) {
+    if (window.__TSG_CONTENT_CLEANUP) {
+      try { window.__TSG_CONTENT_CLEANUP(); } catch (e) {}
+    }
+  }
   window.__TSG_CONTENT_RUNNING = true;
 
-  // --- Context validity check ---
   const isContextValid = () => {
     try {
-      return !!(chrome && chrome.runtime && chrome.runtime.id);
+      return (
+        typeof chrome !== 'undefined' &&
+        chrome.runtime &&
+        typeof chrome.runtime.id === 'string' &&
+        !!chrome.runtime.id
+      );
     } catch (e) {
       return false;
     }
   };
 
-  // Bail immediately if context is already gone
   if (!isContextValid()) {
+    console.error("TSG: Initial context invalid. Is the extension enabled?");
     window.__TSG_CONTENT_RUNNING = false;
     return;
   }
@@ -24,80 +33,136 @@ console.log("!!! TSG CONTENT SCRIPT TRIGGERED !!!");
   let isAlive = true;
   let startTime = Date.now();
   let timerId = null;
+  let port = null;
+  let reconnectTimeoutId = null;
+  let wasContextInvalid = false;
 
-  // Single cleanup function — clears the one timer and resets the guard
-  const killScript = () => {
-    if (!isAlive) return; // already dead, don't run twice
+  const killScript = (reason) => {
+    if (!isAlive) return;
     isAlive = false;
     window.__TSG_CONTENT_RUNNING = false;
-    if (timerId) {
-      clearTimeout(timerId);
-      timerId = null;
+    if (timerId) clearTimeout(timerId);
+    if (reconnectTimeoutId) clearTimeout(reconnectTimeoutId);
+    if (port && port.disconnect) {
+      try { port.disconnect(); } catch (e) {}
     }
-    window.removeEventListener('error', globalErrorHandler);
-    console.warn("TSG: Content script stopped (context invalidated or extension reloaded).");
-  };
-
-  // Catch any uncaught "Extension context invalidated" errors bubbling up
-  const globalErrorHandler = (event) => {
-    if (
-      event &&
-      event.error &&
-      event.error.message &&
-      event.error.message.includes('Extension context invalidated')
-    ) {
-      killScript();
+    if (reason && reason !== 'Reinjection cleanup') {
+      console.error(`%c TSG STOPPED: ${reason} `, "background: #ef4444; color: white;");
     }
   };
-  window.addEventListener('error', globalErrorHandler);
 
-  // --- Port connection for reporting loop ---
-  let port = null;
-  try {
-    port = chrome.runtime.connect({ name: "content-keepalive" });
-  } catch (e) {
-    killScript();
-    return;
-  }
+  // Expose cleanup for future reinjections
+  window.__TSG_CONTENT_CLEANUP = () => killScript('Reinjection cleanup');
 
-  // If the port disconnects (background reload), kill the script immediately
-  if (port) {
-    port.onDisconnect.addListener(() => {
-      killScript();
-    });
-  }
-
-  const reportActivity = () => {
-    if (!isAlive || !isContextValid() || !port) {
-      killScript();
+  // --- Port Connection Logic with Auto-Reconnect ---
+  function connectToBackground(retryCount = 0) {
+    if (!isAlive) return;
+    if (!isContextValid()) {
+      // Wait and retry if context is not valid
+      if (reconnectTimeoutId) clearTimeout(reconnectTimeoutId);
+      reconnectTimeoutId = setTimeout(() => connectToBackground(retryCount + 1), 3000);
       return;
     }
+    try {
+      console.log("TSG: Attempting to connect to Background Service Worker...");
+      port = chrome.runtime.connect({ name: "content-keepalive" });
 
-    // Use a cumulative sessionDuration buffer
-    if (typeof window.sessionDuration === 'undefined') {
-      window.sessionDuration = 0;
+
+      let disconnectWarned = false;
+      port.onDisconnect.addListener(() => {
+        const err = chrome.runtime.lastError;
+        if (!disconnectWarned) {
+          console.warn("TSG: Port disconnected. Reason:", err ? err.message : "Extension reloaded/Background slept.");
+          disconnectWarned = true;
+        }
+        port = null;
+        if (!isAlive) return;
+        // Only attempt to reconnect if context is still valid
+        if (isContextValid()) {
+          if (reconnectTimeoutId) clearTimeout(reconnectTimeoutId);
+          // Exponential backoff: 1s, 2s, 4s, 8s, max 10s
+          const delay = Math.min(1000 * Math.pow(2, Math.min(retryCount, 3)), 10000);
+          reconnectTimeoutId = setTimeout(() => connectToBackground(retryCount + 1), delay);
+          // If too many retries, show a user-friendly message
+          if (retryCount > 6) {
+            console.error("TSG: Unable to reconnect to background after multiple attempts. Please check if the extension is enabled.");
+          }
+        } else {
+          // If context is invalid, let reportActivity handle reconnection
+          if (reconnectTimeoutId) clearTimeout(reconnectTimeoutId);
+        }
+      });
+
+      console.log("TSG: Port connected successfully. ID:", chrome.runtime.id);
+      // Reset disconnect warning on successful connection
+      disconnectWarned = false;
+    } catch (e) {
+      if (!isAlive) return;
+      // Try to reconnect after a short delay
+      if (reconnectTimeoutId) clearTimeout(reconnectTimeoutId);
+      reconnectTimeoutId = setTimeout(() => connectToBackground(retryCount + 1), 2000);
     }
-    const delta = Math.floor((Date.now() - startTime) / 1000);
-    window.sessionDuration += delta;
-    // Heartbeat log for every check
-    console.log(`TSG: Checking... URL: ${window.location.pathname}, Delta: ${delta}s, Session: ${window.sessionDuration}s`);
+  }
 
-    if (window.location.href.includes('/shorts/') && window.sessionDuration >= 5) {
-      try {
-        port.postMessage({ type: "YOUTUBE_ACTIVITY", duration: window.sessionDuration });
-        console.log(`TSG: Reported ${window.sessionDuration}s of Shorts activity`);
-        window.sessionDuration = 0; // Reset only after successful report
-      } catch (e) {
-        killScript();
-        return;
+  connectToBackground();
+
+
+
+  const reportActivity = () => {
+    if (!isAlive) return;
+
+    if (!isContextValid()) {
+      if (!wasContextInvalid) {
+        console.warn("TSG: Context invalid. Will retry in 5s.");
+        wasContextInvalid = true;
       }
+      // Try to reconnect if not already attempting
+      connectToBackground();
+      timerId = setTimeout(reportActivity, 5000);
+      return;
+    } else if (wasContextInvalid) {
+      // Context has become valid again, reconnect to background
+      console.log("TSG: Context restored. Attempting to reconnect to background.");
+      connectToBackground();
+      wasContextInvalid = false;
     }
 
-    startTime = Date.now();
+    const now = Date.now();
+    const delta = Math.floor((now - startTime) / 1000);
+
+    // --- 2. Log URL and Detection Logic ---
+    const isShorts = window.location.href.includes('/shorts/');
+    console.log(`TSG Check: [Shorts: ${isShorts}] [Time on Video: ${delta}s] [URL: ${window.location.pathname}]`);
+
+    if (isShorts) {
+      if (delta >= 5) {
+        if (port) {
+          try {
+            console.log(`%c TSG: Sending message to background... Duration: ${delta}s `, "color: #10b981; font-weight: bold;");
+            port.postMessage({ type: "YOUTUBE_ACTIVITY", duration: delta });
+            startTime = Date.now(); // Reset only on success
+          } catch (e) {
+            console.warn("TSG: Message posting failed. Will retry on next interval.");
+          }
+        } else {
+          // Port is temporarily unavailable, likely due to background sleep. Just wait for reconnect.
+          // Only log once per disconnect event
+          if (!wasContextInvalid) {
+            console.warn("TSG: No port to background. Will retry on next interval.");
+          }
+        }
+      }
+    } else {
+      // If user navigated away from shorts, reset the timer so we don't 
+      // report 60s of "Home Page" time when they finally click a short.
+      startTime = Date.now();
+    }
+
     if (isAlive) {
       timerId = setTimeout(reportActivity, 5000);
     }
   };
 
-  timerId = setTimeout(reportActivity, 10000);
+  // Start the loop
+  timerId = setTimeout(reportActivity, 2000);
 })();

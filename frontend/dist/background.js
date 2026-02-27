@@ -14,48 +14,44 @@ chrome.runtime.onConnect.addListener((port) => {
 
   port.onMessage.addListener((msg) => {
     if (msg.type === "YOUTUBE_ACTIVITY") {
-      console.log("TSG DEBUG: Received activity from Content Script", msg);
+      chrome.storage.local.get(['realtime_stats', 'starknet_address'], (res) => {
+        let stats = res.realtime_stats || { brainrotScore: 0, screenTimeMinutes: 0 };
 
-      chrome.storage.local.get(['starknet_address', 'screenTime'], async (res) => {
-        // Log current state
-        console.log("TSG DEBUG: Current Storage State", {
-          address: res.starknet_address,
-          currentScreenTime: res.screenTime
-        });
+        // Calculate and update locally IMMEDIATELY
+        const pointsPerSecond = 8;
+        const increment = msg.duration * pointsPerSecond;
+        stats.brainrotScore = Math.min(stats.brainrotScore + increment, 10000);
+        stats.screenTimeMinutes += (msg.duration / 60);
 
-        const currentLocal = res.screenTime || 0;
-        const newLocal = currentLocal + (msg.duration / 60);
-        chrome.storage.local.set({ screenTime: newLocal });
+        // Save to storage FIRST
+        chrome.storage.local.set({ realtime_stats: stats }, () => {
+          // Notify UI AFTER storage is confirmed
+          chrome.runtime.sendMessage({ type: "UI_REFRESH" }).catch(() => {});
 
-        if (res.starknet_address) {
-          try {
-            console.log("TSG DEBUG: Attempting Backend Sync...");
-            const response = await fetch('http://localhost:3333/api/data/activity', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ durationSeconds: msg.duration, address: res.starknet_address })
-            });
-            if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
-            const data = await response.json();
-            console.log("TSG DEBUG: Backend Response Success", data);
-
-            if (data.success) {
-              chrome.storage.local.set({
-                realtime_stats: data.stats,
-                sync_error: null
-              }, () => {
-                console.log("TSG DEBUG: Storage updated with new Brainrot Score:", data.stats.brainrotScore);
-              });
-            }
-          } catch (err) {
-            console.error("TSG DEBUG: Sync Failed", err.message);
-            chrome.storage.local.set({ sync_error: "Backend node offline." });
+          // Then attempt backend sync in the background
+          if (res.starknet_address) {
+            (async () => {
+              try {
+                const response = await fetch('http://localhost:3333/api/data/activity', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ durationSeconds: msg.duration, address: res.starknet_address })
+                });
+                if (!response.ok) throw new Error("Server Error");
+                const data = await response.json();
+                if (data.success) {
+                  chrome.storage.local.set({
+                    realtime_stats: data.stats,
+                    sync_error: null
+                  }, () => {
+                    chrome.runtime.sendMessage({ type: "UI_REFRESH" }).catch(() => {});
+                  });
+                }
+              } catch (err) {
+                chrome.storage.local.set({ sync_error: "Backend node offline. Stats may be delayed." });
+              }
+            })();
           }
-        } else {
-          console.warn("TSG DEBUG: No Starknet address found. Skipping backend sync.");
-        }
-        chrome.runtime.sendMessage({ type: "UI_REFRESH" }).catch(() => {
-          console.log("TSG DEBUG: UI not active, refresh skipped.");
         });
       });
     }
@@ -129,8 +125,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     chrome.storage.local.get(['realtime_stats', 'starknet_address'], async (res) => {
       let stats = res.realtime_stats || { brainrotScore: 0, screenTimeMinutes: 0 };
 
-      // Calculate brainrot increase (roughly 8.3 points per 1 second of Shorts)
-      const increment = Math.floor((500 / 60) * message.duration);
+      // Calculate brainrot increase (8 points per 1 second of Shorts)
+      const pointsPerSecond = 8;
+      const increment = message.duration * pointsPerSecond;
       stats.brainrotScore = Math.min(stats.brainrotScore + increment, 10000);
       stats.screenTimeMinutes += (message.duration / 60);
 

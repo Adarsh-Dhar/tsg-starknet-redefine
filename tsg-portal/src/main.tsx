@@ -7,7 +7,7 @@ import { sepolia } from '@starknet-react/chains';
 
 function rpc() {
   return {
-    nodeUrl: "https://starknet-sepolia.public.blastapi.io"
+    nodeUrl: import.meta.env.VITE_STARKNET_RPC || "https://starknet-sepolia.public.blastapi.io"
   };
 }
 

@@ -10,7 +10,8 @@
 		"bullmq": "^5.69.3",
 		"ioredis": "^5.9.3",
 		"node-fetch": "^3.3.2",
-		"redis": "^5.11.0"
+		"redis": "^5.11.0",
+		"starknet": "8.1.2"
 	},
 	"packageManager": "pnpm@9.10.0+sha1.216899f511c8dfde183c7cb50b69009c779534a8",
 	"devDependencies": {

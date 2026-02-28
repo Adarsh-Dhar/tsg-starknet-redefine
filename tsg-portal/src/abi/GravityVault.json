@@ -1,0 +1,66 @@
+[
+  {
+    "type": "impl",
+    "name": "GravityVaultImpl",
+    "interface_name": "grass_vault::IGravityVault"
+  },
+  {
+    "type": "struct",
+    "name": "core::integer::u256",
+    "members": [
+      { "name": "low", "type": "core::integer::u128" },
+      { "name": "high", "type": "core::integer::u128" }
+    ]
+  },
+  {
+    "type": "interface",
+    "name": "grass_vault::IGravityVault",
+    "items": [
+      {
+        "type": "function",
+        "name": "deposit",
+        "inputs": [{ "name": "amount", "type": "core::integer::u256" }],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "slash",
+        "inputs": [
+          { "name": "user", "type": "core::starknet::contract_address::ContractAddress" },
+          { "name": "amount", "type": "core::integer::u256" }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "reclaim",
+        "inputs": [{ "name": "amount", "type": "core::integer::u256" }],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "get_balance",
+        "inputs": [{ "name": "account", "type": "core::starknet::contract_address::ContractAddress" }],
+        "outputs": [{ "type": "core::integer::u256" }],
+        "state_mutability": "view"
+      }
+    ]
+  },
+  {
+    "type": "constructor",
+    "name": "constructor",
+    "inputs": [
+      { "name": "delegate_addr", "type": "core::starknet::contract_address::ContractAddress" },
+      { "name": "token", "type": "core::starknet::contract_address::ContractAddress" }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "grass_vault::GravityVault::Event",
+    "kind": "enum",
+    "variants": []
+  }
+]

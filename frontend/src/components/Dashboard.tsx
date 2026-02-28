@@ -73,18 +73,16 @@ const Dashboard: React.FC<DashboardProps> = ({ brainrotScore, syncAddress }) => 
   const status = getStatus(displayScore);
   const percentage = Math.min((displayScore / 10000) * 100, 100);
 
+  // Responsive grid: 1 column for popup, 2 columns for webapp
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
-      <div className="flex flex-col items-center text-center space-y-1 py-4">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in duration-500">
+      {/* Neural Load Card */}
+      <div className="flex flex-col items-center text-center space-y-1 py-4 bg-slate-900/40 rounded-2xl border border-emerald-500/10">
         <h2 className="text-[10px] font-mono uppercase tracking-[0.3em] text-emerald-500/50">Neural Load</h2>
-        <div className={`text-7xl font-black tracking-tighter tabular-nums ${status.color}`}>
-          {displayScore.toLocaleString()}
-        </div>
-        <div className={`flex items-center gap-2 text-xs font-bold uppercase ${status.color}`}>
-          {status.icon} {status.label}
-        </div>
+        <div className={`text-7xl font-black tracking-tighter tabular-nums ${status.color}`}>{displayScore.toLocaleString()}</div>
+        <div className={`flex items-center gap-2 text-xs font-bold uppercase ${status.color}`}>{status.icon} {status.label}</div>
       </div>
-
+      {/* Stats/Progress Card */}
       <Card className="border-emerald-500/20 bg-slate-900/40 backdrop-blur-md">
         <CardHeader className="pb-2">
           <CardTitle className="text-[10px] font-mono text-slate-400 flex justify-between">

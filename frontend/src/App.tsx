@@ -60,24 +60,34 @@ export default function App() {
     
     // Setup Storage & Message listeners
     refreshData();
-    
-    if (typeof chrome !== 'undefined' && chrome.runtime) {
-      // Listen for explicit UI_REFRESH signals from background.js
-      const messageListener = (msg: any) => {
-        if (msg.type === "UI_REFRESH") refreshData();
-      };
-      
-      chrome.runtime.onMessage.addListener(messageListener);
-      chrome.storage.onChanged.addListener(refreshData);
 
-      return () => {
-        window.removeEventListener('resize', checkEnvironment);
-        chrome.runtime.onMessage.removeListener(messageListener);
-        chrome.storage.onChanged.removeListener(refreshData);
-      };
+    let messageListener: ((msg: any) => void) | undefined;
+    let addedRuntimeListener = false;
+    let addedStorageListener = false;
+
+    if (typeof chrome !== 'undefined') {
+      if (chrome.runtime && typeof chrome.runtime.onMessage !== 'undefined' && typeof chrome.runtime.onMessage.addListener === 'function') {
+        messageListener = (msg: any) => {
+          if (msg.type === "UI_REFRESH") refreshData();
+        };
+        chrome.runtime.onMessage.addListener(messageListener);
+        addedRuntimeListener = true;
+      }
+      if (chrome.storage && typeof chrome.storage.onChanged !== 'undefined' && typeof chrome.storage.onChanged.addListener === 'function') {
+        chrome.storage.onChanged.addListener(refreshData);
+        addedStorageListener = true;
+      }
     }
-    
-    return () => window.removeEventListener('resize', checkEnvironment);
+
+    return () => {
+      window.removeEventListener('resize', checkEnvironment);
+      if (addedRuntimeListener && messageListener && chrome.runtime && typeof chrome.runtime.onMessage.removeListener === 'function') {
+        chrome.runtime.onMessage.removeListener(messageListener);
+      }
+      if (addedStorageListener && chrome.storage && typeof chrome.storage.onChanged.removeListener === 'function') {
+        chrome.storage.onChanged.removeListener(refreshData);
+      }
+    };
   }, []);
 
   return (
@@ -92,8 +102,8 @@ export default function App() {
             {/* FIX: Passing dynamic state instead of hardcoded 0 */}
             <Route path="/" element={
               <Dashboard 
-                brainrotScore={globalStats.brainrotScore} 
-                syncAddress={syncAddress} 
+                brainrotScore={globalStats.brainrotScore}
+                syncAddress={syncAddress}
               />
             } />
             <Route path="/data" element={<DataPage />} />

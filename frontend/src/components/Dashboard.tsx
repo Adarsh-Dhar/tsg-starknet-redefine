@@ -42,7 +42,9 @@ const Dashboard: React.FC<DashboardProps> = ({ brainrotScore, syncAddress }) => 
     return (
       <div className="flex flex-col items-center justify-center p-10 space-y-6">
         <h2 className="text-xl font-bold text-emerald-400">Connect to Start</h2>
-        <WalletPage minimal />
+        <a href="http://localhost:5174/" target="_blank" rel="noopener noreferrer">
+          <WalletPage minimal />
+        </a>
       </div>
     );
   }
@@ -58,7 +60,9 @@ const Dashboard: React.FC<DashboardProps> = ({ brainrotScore, syncAddress }) => 
           You must delegate at least 1 STRK to the vault to unlock your Brainrot monitoring.
         </p>
         <div className="pt-4">
-          <WalletPage minimal />
+          <a href="http://localhost:5174/" target="_blank" rel="noopener noreferrer">
+            <WalletPage minimal />
+          </a>
         </div>
       </div>
     );

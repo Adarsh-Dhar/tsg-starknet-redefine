@@ -20,6 +20,16 @@ const Dashboard: React.FC<DashboardProps> = ({ brainrotScore, syncAddress, deleg
   const { isConnected, address } = useAccount();
   const [displayScore, setDisplayScore] = useState<number>(brainrotScore);
 
+  // Log current state
+  useEffect(() => {
+    console.log('[Dashboard] Current state:', {
+      syncAddress: syncAddress,
+      delegatedAmount: delegatedAmount,
+      hasDelegated: hasDelegated,
+      isAuthorized: !!syncAddress && delegatedAmount >= 1
+    });
+  }, [syncAddress, delegatedAmount, hasDelegated]);
+
   useEffect(() => {
     if (displayScore !== brainrotScore) {
       const timer = setTimeout(() => {

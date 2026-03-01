@@ -50,7 +50,11 @@ export default function App() {
         const data = await response.json();
         
         if (data.success) {
-          console.log('[Auth] Backend response:', data);
+          console.log('[Auth] ✅ Backend response received:', {
+            address: address,
+            amountDelegated: data.amountDelegated,
+            hasAccess: data.amountDelegated >= 1
+          });
           // Use the database as the "Source of Truth"
           setDelegatedAmount(data.amountDelegated);
           setHasDelegated(data.amountDelegated >= 1);
@@ -60,12 +64,16 @@ export default function App() {
             chrome.storage.local.set({ 
               delegated_amount: data.amountDelegated 
             }, () => {
-              console.log('[Auth] Synced delegation data from backend:', data.amountDelegated);
+              console.log('[Auth] ✅ Synced delegation data from backend:', data.amountDelegated, 'STRK');
             });
           }
+        } else {
+          console.log('[Auth] ⚠️ Backend returned success=false:', data);
+          setHasDelegated(false);
+          setDelegatedAmount(0);
         }
       } catch (err) {
-        console.error('[Auth] DB verification failed:', err);
+        console.error('[Auth] ❌ DB verification failed:', err);
         // Fallback to local storage if backend is unavailable
         console.log('[Auth] Falling back to cached local storage');
       }
@@ -82,14 +90,20 @@ export default function App() {
           }
           
           if (res.starknet_address) {
+            console.log('[Extension] Connected address detected:', res.starknet_address);
             setSyncAddress(res.starknet_address as string);
             // CRITICAL: Always verify with backend when we detect an address
             // This ensures the extension gets the latest delegation state
             verifyAuth(res.starknet_address as string);
+          } else {
+            console.log('[Extension] No address detected in storage yet');
+            setHasDelegated(false);
+            setDelegatedAmount(0);
           }
           
           // Set initial values from cache (will be updated by verifyAuth)
           if (res.delegated_amount !== undefined) {
+            console.log('[Storage] Cached delegation amount:', res.delegated_amount);
             setDelegatedAmount(Number(res.delegated_amount));
             setHasDelegated(Number(res.delegated_amount) >= 1);
           } else {

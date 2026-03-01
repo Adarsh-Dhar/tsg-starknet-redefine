@@ -3,7 +3,7 @@ import { GRAVITY_VAULT_ABI } from './abi';
 import { Wallet, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { useAccount, useConnect, useDisconnect } from "@starknet-react/core";
 import { uint256, Contract, Abi } from 'starknet';
-import { useAuth } from './hooks/useAuth';
+import { useAuth } from './contexts/AuthContext';
 
 const VAULT_ADDRESS = "0x0602c5436e8dc621d2003f478d141a76b27571d29064fbb9786ad21032eb4769";
 const STRK_TOKEN_ADDRESS = "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
@@ -131,16 +131,22 @@ export default function WalletPage({ minimal = false }: WalletPageProps) {
         body: JSON.stringify({ starknetAddr: walletAddress })
       });
 
-      const data = await response.json();
-
       if (!response.ok) {
+        const data = await response.json();
         alert(`Error linking wallet: ${data.error}`);
         return;
       }
 
+      const data = await response.json();
+
       // Verify delegation status with backend
       fetch(`${API_BASE_URL}/delegate/status/${walletAddress}`)
-        .then(res => res.json())
+        .then(res => {
+          if (!res.ok) {
+            throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+          }
+          return res.json();
+        })
         .then(data => {
           if (data.success && data.amountDelegated > 0) {
             alert(`✅ Wallet linked! Found ${data.amountDelegated} STRK delegated.`);
@@ -184,7 +190,7 @@ export default function WalletPage({ minimal = false }: WalletPageProps) {
         setDelegationTxHash(txResponse);
         
         // Notify backend of delegation
-        notifyDelegation(user.starknetAddr || address, parseFloat(amount), txResponse);
+        notifyDelegation(user.starknetAddr || address as any as null, parseFloat(amount), txResponse);
       }
 
       alert("✅ Delegation transaction submitted! Check the portal for status.");
@@ -358,6 +364,46 @@ export default function WalletPage({ minimal = false }: WalletPageProps) {
             <div className="mt-3 pt-3 border-t border-white/5">
               <div className="text-[9px] text-white/30 uppercase font-bold mb-1 tracking-tighter">Your Address</div>
               <div className="text-[10px] font-mono text-emerald-100/60 truncate">{address}</div>
+            </div>
+          </div>
+          <div className="p-4 rounded-xl bg-slate-900/40 border border-emerald-500/10">
+            <div className="text-[9px] text-white/30 uppercase font-bold mb-2 tracking-tighter">Account Info</div>
+            <div className="space-y-2">
+              <div>
+                <div className="text-[9px] text-emerald-400/50 uppercase font-bold mb-1">Linked Address</div>
+                <div className="text-[10px] font-mono text-emerald-100/70 break-all">
+                  {user?.starknetAddr ? user.starknetAddr : <span className="text-rose-400/50">Not linked</span>}
+                </div>
+              </div>
+              <div>
+                <div className="text-[9px] text-emerald-400/50 uppercase font-bold mb-1">Delegated Amount</div>
+                <div className="text-[10px] font-bold text-emerald-300">
+                  {user?.delegation?.amountDelegated || user?.amountDelegated ? 
+                    `${((user?.delegation?.amountDelegated ?? user?.amountDelegated ?? 0) / 1e18).toFixed(2)} STRK` : 
+                    <span className="text-white/40">0 STRK</span>
+                  }
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="p-4 rounded-xl bg-slate-900/40 border border-emerald-500/10">
+            <div className="text-[9px] text-white/30 uppercase font-bold mb-2 tracking-tighter">Account Info</div>
+            <div className="space-y-2">
+              <div>
+                <div className="text-[9px] text-emerald-400/50 uppercase font-bold mb-1">Linked Address</div>
+                <div className="text-[10px] font-mono text-emerald-100/70 break-all">
+                  {user?.starknetAddr ? user.starknetAddr : <span className="text-rose-400/50">Not linked</span>}
+                </div>
+              </div>
+              <div>
+                <div className="text-[9px] text-emerald-400/50 uppercase font-bold mb-1">Delegated Amount</div>
+                <div className="text-[10px] font-bold text-emerald-300">
+                  {user?.delegation?.amountDelegated || user?.amountDelegated ? 
+                    `${((user?.delegation?.amountDelegated ?? user?.amountDelegated ?? 0) / 1e18).toFixed(2)} STRK` : 
+                    <span className="text-white/40">0 STRK</span>
+                  }
+                </div>
+              </div>
             </div>
           </div>
           <div className="space-y-2">

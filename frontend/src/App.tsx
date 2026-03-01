@@ -26,16 +26,6 @@ interface RealtimeStats {
 function AppContent() {
   const { user, token, loading, isAuthenticated, logout } = useAuth();
   
-  // Debug logs
-  useEffect(() => {
-    console.log('[App] Auth state changed:', {
-      loading,
-      isAuthenticated,
-      hasUser: !!user,
-      user: user ? { email: user.email, amountDelegated: user.amountDelegated } : null
-    });
-  }, [loading, isAuthenticated, user]);
-  
   // 1. Responsive State & Environment Detection
   const [isExtension, setIsExtension] = useState(false);
   
@@ -47,6 +37,29 @@ function AppContent() {
   const [syncAddress, setSyncAddress] = useState<string | null>(null);
   const [hasDelegated, setHasDelegated] = useState(false);
   const [delegatedAmount, setDelegatedAmount] = useState<number>(0);
+  
+  // Debug logs
+  useEffect(() => {
+    console.log('[App] Auth state changed:', {
+      loading,
+      isAuthenticated,
+      hasUser: !!user,
+      user: user ? { email: user.email, amountDelegated: user.amountDelegated ?? 0 } : null
+    });
+  }, [loading, isAuthenticated, user]);
+
+  // Log address and delegation when data is synced
+  useEffect(() => {
+    if (user && syncAddress && delegatedAmount !== undefined) {
+      console.log('[Delegation] Address synced with email:', {
+        email: user.email,
+        starknetAddress: syncAddress,
+        amountDelegated: delegatedAmount,
+        hasDelegated: hasDelegated,
+        timestamp: new Date().toISOString()
+      });
+    }
+  }, [user, syncAddress, delegatedAmount, hasDelegated]);
 
   useEffect(() => {
     // Detect if running in Chrome Extension protocol or restricted width
@@ -61,6 +74,14 @@ function AppContent() {
       try {
         console.log('[Auth] Verifying delegation status for:', address);
         const response = await fetch(`http://localhost:3333/api/delegate/status/${address}`);
+        
+        if (!response.ok) {
+          console.error('[Auth] ❌ HTTP error:', response.status, response.statusText);
+          setHasDelegated(false);
+          setDelegatedAmount(0);
+          return;
+        }
+        
         const data = await response.json();
         
         if (data.success) {
@@ -69,6 +90,16 @@ function AppContent() {
             amountDelegated: data.amountDelegated,
             hasAccess: data.amountDelegated >= 1
           });
+          // Log with email if user is available
+          if (user) {
+            console.log('[Delegation] Complete sync data:', {
+              email: user.email,
+              starknetAddress: address,
+              amountDelegated: data.amountDelegated,
+              hasAccess: data.amountDelegated >= 1,
+              timestamp: new Date().toISOString()
+            });
+          }
           // Use the database as the "Source of Truth"
           setDelegatedAmount(data.amountDelegated);
           setHasDelegated(data.amountDelegated >= 1);
@@ -105,6 +136,15 @@ function AppContent() {
           
           if (res.starknet_address) {
             console.log('[Extension] Connected address detected:', res.starknet_address);
+            // Log with email if available
+            if (user) {
+              console.log('[Delegation] Address loaded from storage:', {
+                email: user.email,
+                starknetAddress: res.starknet_address,
+                delegatedAmount: res.delegated_amount || 0,
+                timestamp: new Date().toISOString()
+              });
+            }
             setSyncAddress(res.starknet_address as string);
             // CRITICAL: Always verify with backend when we detect an address
             // This ensures the extension gets the latest delegation state
@@ -170,7 +210,7 @@ function AppContent() {
         chrome.storage.onChanged.removeListener(refreshData);
       }
     };
-  }, [syncAddress]);
+  }, [syncAddress, user]);
 
   return (
     <Router>
@@ -212,8 +252,8 @@ function AppContent() {
         {!loading && isAuthenticated && user && (() => {
           console.log('[App] Rendering: Authenticated view', {
             userEmail: user.email,
-            delegated: user.amountDelegated,
-            willShow: user.amountDelegated >= 1 ? 'Dashboard' : 'DelegationGate'
+            delegated: user.amountDelegated ?? 0,
+            willShow: (user.amountDelegated ?? 0) >= 1 ? 'Dashboard' : 'DelegationGate'
           });
           return (
           <>
@@ -222,12 +262,12 @@ function AppContent() {
               <Routes>
                 {/* Check if user has delegated, if not redirect to wallet delegation portal */}
                 <Route path="/" element={
-                  user.amountDelegated >= 1 ? (
+                  (user.amountDelegated ?? 0) >= 1 ? (
                     <Dashboard 
                       brainrotScore={globalStats.brainrotScore}
                       syncAddress={user.starknetAddr}
-                      delegatedAmount={user.amountDelegated}
-                      hasDelegated={user.amountDelegated >= 1}
+                      delegatedAmount={user.amountDelegated ?? 0}
+                      hasDelegated={(user.amountDelegated ?? 0) >= 1}
                     />
                   ) : (
                     <DelegationGate userEmail={user.email} />

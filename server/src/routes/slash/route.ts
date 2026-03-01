@@ -1,32 +1,38 @@
-
 import { Router } from "express";
 import { serverAccount, VAULT_CONTRACT_ADDRESS } from "../../starknet.js";
+import { uint256 } from "starknet";
 
 const router = Router();
 
 router.post("/", async (req, res) => {
-    const { userAddress } = req.body;
+    // Accepting penalty amount from the ingestion trigger
+    const { userAddress, amount = 0.01 } = req.body;
 
     try {
-        // Execute the slash function on the Starknet contract!
+        // Convert STRK amount to Uint256 for Starknet (assuming 18 decimals)
+        const amountWei = BigInt(Math.floor(amount * 10 ** 18));
+        const uint256Amount = uint256.bnToUint256(amountWei);
+
+        // Execute the slash function with the specific penalty amount
         const executeResponse = await serverAccount.execute({
             contractAddress: VAULT_CONTRACT_ADDRESS,
             entrypoint: "slash",
-            calldata: [userAddress]
+            calldata: [
+                userAddress, 
+                uint256Amount.low, 
+                uint256Amount.high
+            ]
         });
 
-        // Wait for transaction to be accepted
         await serverAccount.waitForTransaction(executeResponse.transaction_hash);
-
-        // Tracking removal stubbed (no Redis)
-        // TODO: Remove tracking in persistent store if needed
 
         res.json({ 
             success: true, 
-            txHash: executeResponse.transaction_hash 
+            txHash: executeResponse.transaction_hash,
+            deducted: amount
         });
     } catch (error) {
-        console.error(error);
+        console.error("Penalty Execution Error:", error);
         res.status(500).json({ error: "Failed to execute penalty on-chain." });
     }
 });

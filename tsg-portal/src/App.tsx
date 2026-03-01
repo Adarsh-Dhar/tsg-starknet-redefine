@@ -1,7 +1,7 @@
 /// <reference types="chrome" />
 import { useState, useEffect } from 'react';
 import { useAccount, useConnect, useDisconnect, useProvider } from "@starknet-react/core";
-import { Wallet, ArrowDownCircle, ArrowUpCircle, Loader2 } from 'lucide-react';
+import { Wallet, ArrowDownCircle, ArrowUpCircle, Loader2, CheckCircle, X } from 'lucide-react';
 // Use 'type' for Abi to satisfy verbatimModuleSyntax
 import { uint256, Contract, type Abi } from 'starknet';
 import GravityVaultAbi from './abi/GravityVault.json';
@@ -11,6 +11,110 @@ const GRAVITY_VAULT_ABI = GravityVaultAbi as unknown as Abi;
 
 const VAULT_ADDRESS = "0x0602c5436e8dc621d2003f478d141a76b27571d29064fbb9786ad21032eb4769";
 const STRK_TOKEN_ADDRESS = "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
+
+// Address Sync Confirmation Modal Component
+function AddressSyncModal({ address, email, onConfirm, onCancel }: { address: string; email: string | null; onConfirm: () => void; onCancel: () => void }) {
+  const [isConfirming, setIsConfirming] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleConfirm = async () => {
+    if (!email) {
+      setError('Email not found in URL. Please open this page from the extension.');
+      return;
+    }
+
+    setIsConfirming(true);
+    setError(null);
+    try {
+      // Link wallet to user account via email
+      const response = await fetch('http://localhost:3333/api/auth/link-wallet-by-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: email,
+          starknetAddr: address
+        })
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({ error: 'Failed to sync address' }));
+        setError(data.error || 'Failed to sync address');
+        return;
+      }
+
+      const data = await response.json();
+      console.log('Address sync response:', data);
+      onConfirm();
+    } catch (error) {
+      console.error('Error syncing address:', error);
+      setError('Failed to sync address. Please try again.');
+    } finally {
+      setIsConfirming(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+      <div className="w-full max-w-[450px] animate-in zoom-in fade-in duration-300">
+        <div className="rounded-3xl border border-emerald-500/30 bg-slate-900/95 backdrop-blur-xl shadow-2xl p-8">
+          <div className="flex items-center justify-center mb-6">
+            <div className="p-3 rounded-full bg-emerald-500/10 border border-emerald-500/30">
+              <CheckCircle className="text-emerald-400" size={24} />
+            </div>
+          </div>
+
+          <h2 className="text-center text-xl font-bold text-white mb-2">Confirm Account Sync</h2>
+          <p className="text-center text-slate-400 text-sm mb-6">
+            Are you sure you want to sync this Starknet account with your delegation?
+          </p>
+
+          <div className="bg-slate-950/50 rounded-2xl border border-emerald-500/10 p-4 mb-6">
+            <p className="text-[10px] text-emerald-400/50 uppercase font-bold tracking-widest mb-2">
+              Connected Address
+            </p>
+            <p className="font-mono text-emerald-300 text-sm break-all">
+              {address}
+            </p>
+          </div>
+
+          {error && (
+            <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 mb-4">
+              <p className="text-red-400 text-sm text-center">{error}</p>
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              onClick={onCancel}
+              disabled={isConfirming}
+              className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-slate-500/30 text-slate-300 font-semibold hover:bg-slate-800/50 disabled:opacity-50 transition-all"
+            >
+              <X size={16} />
+              Cancel
+            </button>
+            <button
+              onClick={handleConfirm}
+              disabled={isConfirming}
+              className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-emerald-500 text-slate-950 font-bold hover:bg-emerald-400 disabled:opacity-50 transition-all"
+            >
+              {isConfirming ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" />
+                  Syncing...
+                </>
+              ) : (
+                <>
+                  <CheckCircle size={16} />
+                  Confirm
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function App() {
   const accountInfo = useAccount();
@@ -32,6 +136,19 @@ function App() {
   const [amount, setAmount] = useState('');
   const [loading, setLoading] = useState(false);
   const [delegatedBal, setDelegatedBal] = useState<string>("0.00");
+  const [showAddressConfirmation, setShowAddressConfirmation] = useState(false);
+  const [addressConfirmed, setAddressConfirmed] = useState(false);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+
+  // Extract email from URL parameters
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const emailParam = params.get('email');
+    if (emailParam) {
+      setUserEmail(decodeURIComponent(emailParam));
+      console.log('Email extracted from URL:', decodeURIComponent(emailParam));
+    }
+  }, []);
 
   // Wait for account to be initialized before allowing contract calls
   const refreshBalance = async () => {
@@ -74,16 +191,41 @@ function App() {
         
         // PUSH TO DB: This is the ONLY way the extension will get the amount
         try {
+          const syncData: any = {
+            address: address,
+            amount: Number(addrBal),
+            txHash: "manual_refresh" // Indicates this is a balance refresh, not a transaction
+          };
+          
+          // If email is in URL, include it for email-address linking
+          if (userEmail) {
+            syncData.email = userEmail;
+            console.log("Portal: Including email for wallet linking:", userEmail);
+          }
+          
           await fetch('http://localhost:3333/api/delegate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              address: address,
-              amount: Number(addrBal),
-              txHash: "manual_refresh" // Indicates this is a balance refresh, not a transaction
-            })
+            body: JSON.stringify(syncData)
           });
           console.log("Portal: Pushed delegation data to backend database");
+          
+          // If email was provided, also explicitly link the wallet
+          if (userEmail) {
+            try {
+              await fetch('http://localhost:3333/api/auth/link-wallet-by-email', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  email: userEmail,
+                  starknetAddr: address
+                })
+              });
+              console.log("Portal: Linked wallet to email:", userEmail);
+            } catch (linkError) {
+              console.warn("Portal: Failed to link wallet to email:", linkError);
+            }
+          }
         } catch (dbError) {
           console.warn("Portal: Failed to sync with database (non-critical):", dbError);
         }
@@ -107,13 +249,21 @@ function App() {
   useEffect(() => {
     if (isConnected && address) {
       console.log("useEffect triggered", isConnected, address);
-      refreshBalance();
-      const interval = setInterval(() => {
-        console.log("Interval: calling refreshBalance");
+      // Show address confirmation dialog if not already confirmed
+      if (!addressConfirmed) {
+        setShowAddressConfirmation(true);
+      } else {
         refreshBalance();
-      }, 10000);
-      return () => clearInterval(interval);
+        const interval = setInterval(() => {
+          console.log("Interval: calling refreshBalance");
+          refreshBalance();
+        }, 10000);
+        return () => clearInterval(interval);
+      }
     } else if (!isConnected) {
+      // Reset confirmation state on disconnect
+      setAddressConfirmed(false);
+      setShowAddressConfirmation(false);
       // Clear storage on disconnect
       if (typeof chrome !== 'undefined' && chrome.storage) {
         chrome.storage.local.remove(['starknet_address', 'delegated_amount'], () => {
@@ -121,7 +271,7 @@ function App() {
         });
       }
     }
-  }, [isConnected, address]);
+  }, [isConnected, address, addressConfirmed]);
 
   const handleTransaction = async (type: 'delegate' | 'undelegate') => {
     if (!account || !address) {
@@ -270,7 +420,7 @@ function App() {
               <div className="grid grid-cols-2 gap-3">
                 <button 
                   onClick={() => handleTransaction('delegate')}
-                  disabled={loading || !isConnected || !amount}
+                  disabled={loading || !isConnected || !amount || !addressConfirmed}
                   className="flex flex-col items-center justify-center gap-2 p-4 rounded-2xl bg-emerald-500 text-slate-950 font-bold hover:bg-emerald-400 disabled:opacity-20 transition-all group z-50"
                 >
                   {loading ? <Loader2 className="animate-spin" /> : <ArrowDownCircle className="group-hover:translate-y-0.5 transition-transform" />}
@@ -279,7 +429,7 @@ function App() {
                 
                 <button 
                   onClick={() => handleTransaction('undelegate')}
-                  disabled={loading || !isConnected || !amount}
+                  disabled={loading || !isConnected || !amount || !addressConfirmed}
                   className="flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border border-emerald-500/20 text-emerald-400 font-bold hover:bg-emerald-500/5 disabled:opacity-20 transition-all group z-50"
                 >
                   {loading ? <Loader2 className="animate-spin" /> : <ArrowUpCircle className="group-hover:-translate-y-0.5 transition-transform" />}
@@ -292,10 +442,39 @@ function App() {
                   Please connect your wallet to interact
                 </p>
               )}
+
+              {isConnected && !addressConfirmed && (
+                <p className="text-[10px] text-center text-amber-400/60 uppercase font-bold tracking-tighter">
+                  Please confirm your address to proceed
+                </p>
+              )}
             </div>
           </div>
         </div>
       </main>
+
+      {/* Address Sync Confirmation Modal */}
+      {showAddressConfirmation && address && (
+        <AddressSyncModal
+          address={address}
+          email={userEmail}
+          onConfirm={() => {
+            setAddressConfirmed(true);
+            setShowAddressConfirmation(false);
+            // Start balance refresh after confirmation
+            refreshBalance();
+            const interval = setInterval(() => {
+              console.log("Interval: calling refreshBalance after address confirmation");
+              refreshBalance();
+            }, 10000);
+            return () => clearInterval(interval);
+          }}
+          onCancel={() => {
+            setShowAddressConfirmation(false);
+            disconnect();
+          }}
+        />
+      )}
     </div>
   );
 }

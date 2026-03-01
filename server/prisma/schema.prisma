@@ -17,7 +17,7 @@ model User {
   email         String      @unique
   password      String      // Hashed
   starknetAddr  String?     @unique
-  delegation    Delegation? @relation(fields: [starknetAddr], references: [address])
+  delegation    Delegation?
 }
 
 model Delegation {
@@ -26,5 +26,6 @@ model Delegation {
   amountDelegated Float    @default(0.0)
   lastUpdated     DateTime @default(now()) @updatedAt
   lastTxHash      String?
-  user            User?
+  userId          String?   @unique
+  user            User?     @relation(fields: [userId], references: [id])
 }

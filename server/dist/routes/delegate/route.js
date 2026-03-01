@@ -8,6 +8,7 @@ const DelegateRequestSchema = z.object({
     address: z.string().min(1, 'Address is required'),
     amount: z.number().positive('Amount must be positive'),
     txHash: z.string().min(1, 'Transaction hash is required'),
+    email: z.string().email().optional(), // Optional email for linking
 });
 const StatusRequestSchema = z.object({
     address: z.string().min(1, 'Address is required'),
@@ -27,8 +28,8 @@ router.post('/', async (req, res) => {
                 details: parsed.error.issues,
             });
         }
-        const { address, amount, txHash } = parsed.data;
-        console.log(`[Delegate] New delegation request: address=${address}, amount=${amount}, txHash=${txHash}`);
+        const { address, amount, txHash, email } = parsed.data;
+        console.log(`[Delegate] New delegation request: address=${address}, amount=${amount}, txHash=${txHash}${email ? `, email=${email}` : ''}`);
         // Skip verification for balance refreshes from the portal
         const isBalanceRefresh = txHash === 'manual_refresh';
         if (!isBalanceRefresh) {
@@ -60,6 +61,34 @@ router.post('/', async (req, res) => {
             },
         });
         console.log(`[Delegate] Delegation updated for ${address}: ${amount} STRK`);
+        // If email is provided, link the wallet to the user account
+        if (email) {
+            try {
+                const user = await prisma.user.findUnique({
+                    where: { email },
+                });
+                if (user) {
+                    // Update user with starknet address
+                    await prisma.user.update({
+                        where: { id: user.id },
+                        data: { starknetAddr: address },
+                    });
+                    // Link delegation to user
+                    await prisma.delegation.update({
+                        where: { address },
+                        data: { userId: user.id },
+                    });
+                    console.log(`[Delegate] Linked wallet ${address} to user ${email}`);
+                }
+                else {
+                    console.warn(`[Delegate] User not found for email: ${email}`);
+                }
+            }
+            catch (linkError) {
+                console.error(`[Delegate] Error linking wallet to user:`, linkError);
+                // Don't fail the request if linking fails
+            }
+        }
         return res.status(200).json({
             success: true,
             message: 'Delegation recorded successfully',

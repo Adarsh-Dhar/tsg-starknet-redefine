@@ -5,9 +5,14 @@ import WalletPage from '../WalletPage';
 import { Zap, Flame, Brain, TrendingUp, Lock } from 'lucide-react';
 import Progress from './ui/progress';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
+import { Contract, uint256, RpcProvider, type Abi } from 'starknet';
+import GravityVaultAbiJson from '../abi/GravityVault.json';
 
+// Extract just the ABI from the compiled contract JSON
+const GRAVITY_VAULT_ABI = (GravityVaultAbiJson as any).abi as Abi;
 const STRK_TOKEN_ADDRESS = "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
 const VAULT_ADDRESS = "0x0602c5436e8dc621d2003f478d141a76b27571d29064fbb9786ad21032eb4769";
+const RPC_URL = "https://starknet-sepolia.public.blastapi.io";
 
 interface DashboardProps {
   brainrotScore: number;
@@ -19,16 +24,72 @@ interface DashboardProps {
 const Dashboard: React.FC<DashboardProps> = ({ brainrotScore, syncAddress, delegatedAmount = 0, hasDelegated }) => {
   const { isConnected, address } = useAccount();
   const [displayScore, setDisplayScore] = useState<number>(brainrotScore);
+  const [contractDelegatedAmount, setContractDelegatedAmount] = useState<number>(delegatedAmount);
+  const [isLoadingBalance, setIsLoadingBalance] = useState(false);
+
+  // Fetch actual delegated amount from smart contract
+  useEffect(() => {
+    const fetchContractBalance = async () => {
+      if (!syncAddress) {
+        console.log('[Dashboard] Skipping contract balance fetch: no syncAddress');
+        return;
+      }
+
+      // Check if we're in a Chrome extension context
+      const isExtension = typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id;
+      
+      if (isExtension) {
+        // In extension, use the database value passed via props
+        console.log('[Dashboard] Using database value in extension context:', delegatedAmount);
+        setContractDelegatedAmount(delegatedAmount);
+        return;
+      }
+
+      setIsLoadingBalance(true);
+      try {
+        // Create standalone RPC provider (works in web app context)
+        const rpcProvider = new RpcProvider({ nodeUrl: RPC_URL });
+        
+         const vault = new Contract({
+          abi: GRAVITY_VAULT_ABI,
+          address: VAULT_ADDRESS,
+          providerOrAccount: rpcProvider
+        });
+
+        console.log('[Dashboard] Fetching contract balance for:', syncAddress);
+        const result = await vault.get_balance(syncAddress);
+        
+        if (result) {
+          const amountBigInt = uint256.uint256ToBN(result);
+          const amount = Number(amountBigInt) / 10 ** 18;
+          console.log('[Dashboard] Contract balance fetched:', amount);
+          setContractDelegatedAmount(amount);
+        }
+      } catch (error) {
+        console.error('[Dashboard] Failed to fetch contract balance (using database value):', error);
+        // Fallback to database value on error
+        setContractDelegatedAmount(delegatedAmount);
+      } finally {
+        setIsLoadingBalance(false);
+      }
+    };
+
+    fetchContractBalance();
+    // Refresh every 10 seconds
+    const interval = setInterval(fetchContractBalance, 10000);
+    return () => clearInterval(interval);
+  }, [syncAddress, delegatedAmount]);
 
   // Log current state
   useEffect(() => {
     console.log('[Dashboard] Current state:', {
       syncAddress: syncAddress,
       delegatedAmount: delegatedAmount,
+      contractDelegatedAmount: contractDelegatedAmount,
       hasDelegated: hasDelegated,
-      isAuthorized: !!syncAddress && delegatedAmount >= 1
+      isAuthorized: !!syncAddress && contractDelegatedAmount >= 1
     });
-  }, [syncAddress, delegatedAmount, hasDelegated]);
+  }, [syncAddress, delegatedAmount, contractDelegatedAmount, hasDelegated]);
 
   useEffect(() => {
     if (displayScore !== brainrotScore) {
@@ -43,8 +104,8 @@ const Dashboard: React.FC<DashboardProps> = ({ brainrotScore, syncAddress, deleg
     }
   }, [brainrotScore, displayScore]);
 
-  // AUTHORIZATION GATE: Must have address AND >= 1 STRK
-  const isAuthorized = !!syncAddress && delegatedAmount >= 1;
+  // AUTHORIZATION GATE: Must have address AND >= 1 STRK (from contract)
+  const isAuthorized = !!syncAddress && contractDelegatedAmount >= 1;
 
   if (!isAuthorized) {
     return (
@@ -60,7 +121,9 @@ const Dashboard: React.FC<DashboardProps> = ({ brainrotScore, syncAddress, deleg
         </div>
         <div className="p-4 rounded-xl bg-slate-900 border border-emerald-500/10 w-full shadow-inner">
           <p className="text-[9px] text-emerald-500/40 uppercase font-black mb-1 tracking-widest">Current Stake</p>
-          <p className="text-lg font-mono font-bold text-white">{delegatedAmount.toFixed(2)} / 1.00 STRK</p>
+          <p className="text-lg font-mono font-bold text-white">
+            {isLoadingBalance ? '...' : contractDelegatedAmount.toFixed(2)} / 1.00 STRK
+          </p>
         </div>
         <a 
           href="http://localhost:5174" 

@@ -218,6 +218,141 @@ router.post('/link-wallet', authenticateToken, async (req, res) => {
         });
     }
 });
+// POST /api/auth/link-wallet-by-email - Link Starknet wallet to user account via email (public endpoint)
+router.post('/link-wallet-by-email', async (req, res) => {
+    try {
+        const { email, starknetAddr } = req.body;
+        if (!email || !starknetAddr) {
+            return res.status(400).json({
+                success: false,
+                error: 'Email and Starknet address are required'
+            });
+        }
+        // Validate email format
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid email format'
+            });
+        }
+        // Find user by email
+        const user = await prisma.user.findUnique({
+            where: { email }
+        });
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                error: 'User not found with this email. Please sign up first.'
+            });
+        }
+        // Check if address is already linked to another user
+        const existingUser = await prisma.user.findUnique({
+            where: { starknetAddr }
+        });
+        if (existingUser && existingUser.id !== user.id) {
+            return res.status(409).json({
+                success: false,
+                error: 'This wallet is already linked to another account'
+            });
+        }
+        // Update user with Starknet address
+        const updatedUser = await prisma.user.update({
+            where: { id: user.id },
+            data: { starknetAddr }
+        });
+        // Create or update delegation record
+        await prisma.delegation.upsert({
+            where: { address: starknetAddr },
+            update: {
+                lastUpdated: new Date(),
+                lastTxHash: 'address_sync_confirmation'
+            },
+            create: {
+                address: starknetAddr,
+                amountDelegated: 0,
+                lastTxHash: 'address_sync_confirmation'
+            }
+        });
+        // Fetch updated user with delegation
+        const userWithDelegation = await prisma.user.findUnique({
+            where: { id: user.id },
+            include: { delegation: true }
+        });
+        res.json({
+            success: true,
+            message: 'Wallet linked successfully',
+            user: {
+                id: userWithDelegation.id,
+                email: userWithDelegation.email,
+                starknetAddr: userWithDelegation.starknetAddr,
+                amountDelegated: userWithDelegation.delegation?.amountDelegated || 0
+            }
+        });
+    }
+    catch (error) {
+        console.error('Link wallet by email error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to link wallet',
+            details: error.message
+        });
+    }
+});
+// PATCH /api/auth/update-address - Update user's Starknet address (authenticated)
+router.patch('/update-address', authenticateToken, async (req, res) => {
+    try {
+        const userId = req.user.userId;
+        const { starknetAddr } = req.body;
+        if (!starknetAddr) {
+            return res.status(400).json({
+                success: false,
+                error: 'Starknet address is required'
+            });
+        }
+        // Validate address format (basic check)
+        if (!starknetAddr.startsWith('0x')) {
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid Starknet address format (must start with 0x)'
+            });
+        }
+        // Check if address is already linked to another user
+        const existingUser = await prisma.user.findUnique({
+            where: { starknetAddr }
+        });
+        if (existingUser && existingUser.id !== userId) {
+            return res.status(409).json({
+                success: false,
+                error: 'This wallet is already linked to another account'
+            });
+        }
+        // Update user with new Starknet address
+        const updatedUser = await prisma.user.update({
+            where: { id: userId },
+            data: { starknetAddr },
+            include: { delegation: true }
+        });
+        res.json({
+            success: true,
+            message: 'Starknet address updated successfully',
+            user: {
+                id: updatedUser.id,
+                email: updatedUser.email,
+                starknetAddr: updatedUser.starknetAddr,
+                amountDelegated: updatedUser.delegation?.amountDelegated || 0
+            }
+        });
+    }
+    catch (error) {
+        console.error('Update address error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to update address',
+            details: error.message
+        });
+    }
+});
 // POST /api/auth/refresh - Refresh access token using refresh token
 router.post('/refresh', async (req, res) => {
     try {

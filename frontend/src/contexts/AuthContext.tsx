@@ -10,11 +10,21 @@ import {
 
 const API_BASE_URL = 'http://localhost:3333/api';
 
+export interface Delegation {
+  id: string;
+  address: string;
+  amountDelegated: number;
+  lastUpdated: string;
+  lastTxHash?: string | null;
+  userId?: string;
+}
+
 export interface AuthUser {
   id: string;
   email: string;
   starknetAddr: string | null;
-  amountDelegated: number;
+  amountDelegated?: number;
+  delegation?: Delegation | null;
   lastTxHash?: string;
   lastUpdated?: string;
 }

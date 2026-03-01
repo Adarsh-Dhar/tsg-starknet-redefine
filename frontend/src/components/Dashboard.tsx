@@ -12,16 +12,12 @@ const VAULT_ADDRESS = "0x0602c5436e8dc621d2003f478d141a76b27571d29064fbb9786ad21
 interface DashboardProps {
   brainrotScore: number;
   syncAddress: string | null;
+  delegatedAmount?: number;
+  hasDelegated?: boolean;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ brainrotScore, syncAddress }) => {
+const Dashboard: React.FC<DashboardProps> = ({ brainrotScore, syncAddress, delegatedAmount, hasDelegated }) => {
   const { isConnected, address } = useAccount();
-  // Check for delegation balance in the vault
-  const { data: delegationBalance, isLoading } = useBalance({
-    address: address,
-    token: STRK_TOKEN_ADDRESS,
-    watch: true,
-  });
   const [displayScore, setDisplayScore] = useState<number>(brainrotScore);
 
   useEffect(() => {
@@ -37,33 +33,16 @@ const Dashboard: React.FC<DashboardProps> = ({ brainrotScore, syncAddress }) => 
     }
   }, [brainrotScore, displayScore]);
 
-  // --- GATE 1: Wallet Connection ---
-  if (!isConnected) {
+
+  // --- AUTHORIZATION GATE ---
+  const isAuthorized = syncAddress && (typeof delegatedAmount === 'number' ? delegatedAmount >= 1 : hasDelegated);
+  if (!isAuthorized) {
     return (
       <div className="flex flex-col items-center justify-center p-10 space-y-6">
         <h2 className="text-xl font-bold text-emerald-400">Connect to Start</h2>
         <a href="http://localhost:5174/" target="_blank" rel="noopener noreferrer">
           <WalletPage minimal />
         </a>
-      </div>
-    );
-  }
-
-  // --- GATE 2: Delegation Check ---
-  const delegatedAmount = delegationBalance ? Number(delegationBalance.formatted) : 0;
-  if (delegatedAmount < 1) {
-    return (
-      <div className="max-w-md mx-auto p-8 rounded-2xl glass-effect border border-rose-500/30 bg-rose-900/10 text-center space-y-4">
-        <Lock className="w-12 h-12 text-rose-500 mx-auto animate-pulse" />
-        <h2 className="text-xl font-bold text-white">Minimum Delegation Required</h2>
-        <p className="text-sm text-slate-400">
-          You must delegate at least 1 STRK to the vault to unlock your Brainrot monitoring.
-        </p>
-        <div className="pt-4">
-          <a href="http://localhost:5174/" target="_blank" rel="noopener noreferrer">
-            <WalletPage minimal />
-          </a>
-        </div>
       </div>
     );
   }

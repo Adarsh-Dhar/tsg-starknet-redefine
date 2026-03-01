@@ -1,4 +1,8 @@
 {
+  "compilerOptions": {
+    "types": ["chrome", "vite/client"],
+    "preserveSymlinks": true
+  },
   "files": [],
   "references": [
     { "path": "./tsconfig.app.json" },

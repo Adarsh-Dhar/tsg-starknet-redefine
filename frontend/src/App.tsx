@@ -31,6 +31,8 @@ export default function App() {
     screenTimeMinutes: 0 
   });
   const [syncAddress, setSyncAddress] = useState<string | null>(null);
+  const [hasDelegated, setHasDelegated] = useState(false);
+  const [delegatedAmount, setDelegatedAmount] = useState<number>(0);
 
   useEffect(() => {
     // Detect if running in Chrome Extension protocol or restricted width
@@ -43,12 +45,20 @@ export default function App() {
     // Initial Data Fetch from Extension Storage
     const refreshData = () => {
       if (typeof chrome !== 'undefined' && chrome.storage) {
-        chrome.storage.local.get(['realtime_stats', 'starknet_address'], (res) => {
+        chrome.storage.local.get(['realtime_stats', 'starknet_address', 'delegated_amount'], (res) => {
           if (res.realtime_stats) {
             setGlobalStats(res.realtime_stats as RealtimeStats);
           }
           if (res.starknet_address) {
             setSyncAddress(res.starknet_address as string);
+          }
+          // Add this to track authorization
+          if (res.delegated_amount !== undefined) {
+            setDelegatedAmount(Number(res.delegated_amount));
+            setHasDelegated(Number(res.delegated_amount) >= 1);
+          } else {
+            setDelegatedAmount(0);
+            setHasDelegated(false);
           }
         });
       }
@@ -104,6 +114,8 @@ export default function App() {
               <Dashboard 
                 brainrotScore={globalStats.brainrotScore}
                 syncAddress={syncAddress}
+                delegatedAmount={delegatedAmount}
+                hasDelegated={hasDelegated}
               />
             } />
             <Route path="/data" element={<DataPage />} />

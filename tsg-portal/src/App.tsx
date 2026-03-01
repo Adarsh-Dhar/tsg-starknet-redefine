@@ -1,3 +1,4 @@
+/// <reference types="chrome" />
 import { useState, useEffect } from 'react';
 import { useAccount, useConnect, useDisconnect, useProvider } from "@starknet-react/core";
 import { Wallet, ArrowDownCircle, ArrowUpCircle, Loader2 } from 'lucide-react';
@@ -70,6 +71,14 @@ function App() {
         console.log("Formatted balance for STRK:", addrBal);
         setDelegatedBal(addrBal);
         console.log(`Balance sync successful: ${addrBal} STRK`);
+          if (typeof chrome !== 'undefined' && chrome.storage) {
+            chrome.storage.local.set({ 
+              starknet_address: address,
+              delegated_amount: Number(addrBal)
+            }, () => {
+              console.log("Portal: Synced delegation data to storage");
+            });
+          }
       } else {
         console.log("No result returned from get_balance.");
       }

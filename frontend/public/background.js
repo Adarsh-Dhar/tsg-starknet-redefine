@@ -152,7 +152,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         // Send response back to content script to confirm receipt
         sendResponse({ success: true, stats: stats });
       });
-      });
 
       if (res.starknet_address) {
         try {

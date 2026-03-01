@@ -36,19 +36,26 @@ router.post('/', async (req: Request, res: Response) => {
 
     console.log(`[Delegate] New delegation request: address=${address}, amount=${amount}, txHash=${txHash}`);
 
-    // Verify the transaction on-chain
-    const isValid = await verifyDelegationTransaction(
-      txHash,
-      address,
-      BigInt(Math.floor(amount * 10 ** 18))
-    );
+    // Skip verification for balance refreshes from the portal
+    const isBalanceRefresh = txHash === 'manual_refresh';
+    
+    if (!isBalanceRefresh) {
+      // Verify the transaction on-chain only for real transactions
+      const isValid = await verifyDelegationTransaction(
+        txHash,
+        address,
+        BigInt(Math.floor(amount * 10 ** 18))
+      );
 
-    if (!isValid) {
-      console.warn(`[Delegate] Transaction verification failed for ${txHash}`);
-      return res.status(400).json({
-        error: 'Transaction verification failed',
-        message: 'The transaction could not be verified on-chain. Please check the transaction hash.',
-      });
+      if (!isValid) {
+        console.warn(`[Delegate] Transaction verification failed for ${txHash}`);
+        return res.status(400).json({
+          error: 'Transaction verification failed',
+          message: 'The transaction could not be verified on-chain. Please check the transaction hash.',
+        });
+      }
+    } else {
+      console.log(`[Delegate] Balance refresh request - skipping on-chain verification`);
     }
 
     // Update or create the delegation record

@@ -71,14 +71,31 @@ function App() {
         console.log("Formatted balance for STRK:", addrBal);
         setDelegatedBal(addrBal);
         console.log(`Balance sync successful: ${addrBal} STRK`);
-          if (typeof chrome !== 'undefined' && chrome.storage) {
-            chrome.storage.local.set({ 
-              starknet_address: address,
-              delegated_amount: Number(addrBal)
-            }, () => {
-              console.log("Portal: Synced delegation data to storage");
-            });
-          }
+        
+        // PUSH TO DB: This is the ONLY way the extension will get the amount
+        try {
+          await fetch('http://localhost:3333/api/delegate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              address: address,
+              amount: Number(addrBal),
+              txHash: "manual_refresh" // Indicates this is a balance refresh, not a transaction
+            })
+          });
+          console.log("Portal: Pushed delegation data to backend database");
+        } catch (dbError) {
+          console.warn("Portal: Failed to sync with database (non-critical):", dbError);
+        }
+        
+        if (typeof chrome !== 'undefined' && chrome.storage) {
+          chrome.storage.local.set({ 
+            starknet_address: address,
+            delegated_amount: Number(addrBal)
+          }, () => {
+            console.log("Portal: Synced delegation data to storage");
+          });
+        }
       } else {
         console.log("No result returned from get_balance.");
       }

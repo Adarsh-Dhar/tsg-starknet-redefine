@@ -96,7 +96,7 @@ export default function App() {
             // This ensures the extension gets the latest delegation state
             verifyAuth(res.starknet_address as string);
           } else {
-            console.log('[Extension] No address detected in storage yet');
+            console.log('[Extension] No address detected in storage. User must sync in Wallet tab.');
             setHasDelegated(false);
             setDelegatedAmount(0);
           }

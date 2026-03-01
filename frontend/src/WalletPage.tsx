@@ -20,6 +20,20 @@ export default function WalletPage({ minimal = false }: WalletPageProps) {
   const [loading, setLoading] = useState(false);
   // Removed pubKey state, not needed for sidebar sync
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
+  const [manualAddress, setManualAddress] = useState("");
+
+  // Check for address in URL params on mount
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const urlAddress = params.get('address');
+    if (urlAddress && urlAddress.startsWith('0x')) {
+      setManualAddress(urlAddress);
+      // Auto-sync if address is in URL
+      chrome.storage.local.set({ starknet_address: urlAddress }, () => {
+        console.log("Auto-synced address from URL:", urlAddress);
+      });
+    }
+  }, []);
 
   const syncWithExtension = async () => {
     if (!isConnected || !address || !account) return;
@@ -83,6 +97,34 @@ export default function WalletPage({ minimal = false }: WalletPageProps) {
     syncWithExtension();
   };
 
+  // Manual address sync for cross-origin bridge
+  const handleManualSync = () => {
+    if (manualAddress.startsWith("0x")) {
+      chrome.storage.local.set({ starknet_address: manualAddress }, () => {
+        console.log("Manual sync - Address saved to extension storage:", manualAddress);
+        
+        // Immediately verify with backend
+        fetch(`http://localhost:3333/api/delegate/status/${manualAddress}`)
+          .then(res => res.json())
+          .then(data => {
+            if (data.success && data.amountDelegated > 0) {
+              alert(`✅ Address synced! Found ${data.amountDelegated} STRK delegated. The dashboard will now update.`);
+            } else {
+              alert("✅ Address synced! No delegation found yet. Delegate tokens on the portal first.");
+            }
+          })
+          .catch(() => {
+            alert("Address synced to extension! (Could not verify with backend - make sure server is running)");
+          });
+        
+        setManualAddress("");
+        window.location.hash = "/"; // Redirect to dashboard
+      });
+    } else {
+      alert("Please enter a valid Starknet address (starting with 0x)");
+    }
+  };
+
   const handleDelegate = async () => {
     if (!account || !amount) return;
     setLoading(true);
@@ -123,6 +165,22 @@ export default function WalletPage({ minimal = false }: WalletPageProps) {
       </div>
     ) : (
       <div className="space-y-4">
+        <div className="p-4 bg-slate-900/50 rounded-2xl border border-emerald-500/10 space-y-3">
+          <p className="text-[10px] text-emerald-500/50 uppercase font-bold">Manual Sync</p>
+          <input 
+            value={manualAddress}
+            onChange={(e) => setManualAddress(e.target.value)}
+            placeholder="Paste Starknet Address"
+            className="w-full bg-slate-950 border border-emerald-500/20 p-2 rounded-lg text-xs outline-none focus:border-emerald-400 transition-colors"
+          />
+          <button 
+            onClick={handleManualSync}
+            disabled={!manualAddress.startsWith("0x")}
+            className="w-full py-2 bg-emerald-500 text-slate-950 rounded-lg text-xs font-bold disabled:opacity-50 hover:bg-emerald-400 transition-all"
+          >
+            Sync with Extension
+          </button>
+        </div>
         <div className="p-4 rounded-xl bg-slate-900/60 border border-emerald-500/10">
           <div className="text-[10px] text-emerald-400/50 uppercase font-bold mb-1">Sidebar Sync Status</div>
           <div className="flex items-center gap-2 text-xs">
@@ -187,6 +245,22 @@ export default function WalletPage({ minimal = false }: WalletPageProps) {
         </div>
       ) : (
         <div className="space-y-4">
+          <div className="p-4 bg-slate-900/50 rounded-2xl border border-emerald-500/10 space-y-3">
+            <p className="text-[10px] text-emerald-500/50 uppercase font-bold">Manual Sync</p>
+            <input 
+              value={manualAddress}
+              onChange={(e) => setManualAddress(e.target.value)}
+              placeholder="Paste Starknet Address"
+              className="w-full bg-slate-950 border border-emerald-500/20 p-2 rounded-lg text-xs outline-none focus:border-emerald-400 transition-colors"
+            />
+            <button 
+              onClick={handleManualSync}
+              disabled={!manualAddress.startsWith("0x")}
+              className="w-full py-2 bg-emerald-500 text-slate-950 rounded-lg text-xs font-bold disabled:opacity-50 hover:bg-emerald-400 transition-all"
+            >
+              Sync with Extension
+            </button>
+          </div>
           <div className="p-4 rounded-xl bg-slate-900/60 border border-emerald-500/10">
             <div className="text-[10px] text-emerald-400/50 uppercase font-bold mb-1">Sidebar Sync Status</div>
             <div className="flex items-center gap-2 text-xs">

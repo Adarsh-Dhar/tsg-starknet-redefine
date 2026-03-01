@@ -12,7 +12,19 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 chrome.runtime.onConnect.addListener((port) => {
   if (port.name !== "content-keepalive") return;
 
+  console.log("✅ TSG: Content script connected via port.");
+
   port.onMessage.addListener((msg) => {
+    if (msg.type === "PING") {
+      // Respond to ping to confirm connection
+      try {
+        port.postMessage({ type: "PONG" });
+      } catch (e) {
+        console.warn("TSG: Failed to send PONG:", e.message);
+      }
+      return;
+    }
+
     if (msg.type === "YOUTUBE_ACTIVITY") {
       chrome.storage.local.get(['realtime_stats', 'starknet_address'], (res) => {
         let stats = res.realtime_stats || { brainrotScore: 0, screenTimeMinutes: 0 };
@@ -57,7 +69,9 @@ chrome.runtime.onConnect.addListener((port) => {
     }
   });
 
-  port.onDisconnect.addListener(() => {});
+  port.onDisconnect.addListener(() => {
+    console.warn("⚠️ TSG: Content script port disconnected.");
+  });
 });
 // Unified External Listener
 chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => {

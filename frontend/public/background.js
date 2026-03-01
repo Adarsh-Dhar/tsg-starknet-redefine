@@ -148,6 +148,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       chrome.storage.local.set({ realtime_stats: stats }, () => {
         // Force UI refresh
         chrome.runtime.sendMessage({ type: "UI_REFRESH" }).catch(() => {});
+        
+        // Send response back to content script to confirm receipt
+        sendResponse({ success: true, stats: stats });
+      });
       });
 
       if (res.starknet_address) {

@@ -159,13 +159,26 @@ function App() {
           });
           
           if (!syncResponse.ok) {
-            console.error('Failed to sync delegation with backend:', await syncResponse.text());
+            const errorText = await syncResponse.text();
+            console.error('Failed to sync delegation with backend:', errorText);
+            alert('Warning: Transaction succeeded on-chain but backend sync failed. Please refresh.');
           } else {
-            console.log('Delegation synced with backend successfully');
+            const syncData = await syncResponse.json();
+            console.log('Backend sync successful:', syncData);
+            
+            // Update chrome storage with confirmed database state
+            if (typeof chrome !== 'undefined' && chrome.storage) {
+              chrome.storage.local.set({ 
+                starknet_address: address,
+                delegated_amount: syncData.delegation.amountDelegated
+              }, () => {
+                console.log('Portal: Updated storage with backend-confirmed delegation');
+              });
+            }
           }
         } catch (syncError) {
-          console.error('Error syncing with backend:', syncError);
-          // Don't fail the whole transaction if backend sync fails
+          console.error('Database sync failed, but transaction succeeded on-chain:', syncError);
+          alert('Warning: Transaction succeeded but backend sync failed. The extension may take longer to update.');
         }
       }
       

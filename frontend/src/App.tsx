@@ -42,29 +42,32 @@ export default function App() {
       setIsExtension(isExtProtocol || isSidePanelWidth);
     };
 
-    // Verify delegation status from backend API
+    // Verify delegation status from backend API (Source of Truth)
     const verifyAuth = async (address: string) => {
       try {
+        console.log('[Auth] Verifying delegation status for:', address);
         const response = await fetch(`http://localhost:3333/api/delegate/status/${address}`);
         const data = await response.json();
         
         if (data.success) {
-          // Update local state based on DB truth
+          console.log('[Auth] Backend response:', data);
+          // Use the database as the "Source of Truth"
           setDelegatedAmount(data.amountDelegated);
-          setHasDelegated(data.isDelegated);
+          setHasDelegated(data.amountDelegated >= 1);
           
-          // Cache in local storage for instant loading next time
+          // Update local storage so the UI doesn't flicker on next open
           if (typeof chrome !== 'undefined' && chrome.storage) {
             chrome.storage.local.set({ 
               delegated_amount: data.amountDelegated 
             }, () => {
-              console.log("Frontend: Synced delegation data from backend");
+              console.log('[Auth] Synced delegation data from backend:', data.amountDelegated);
             });
           }
         }
       } catch (err) {
-        console.error("DB verification failed", err);
+        console.error('[Auth] DB verification failed:', err);
         // Fallback to local storage if backend is unavailable
+        console.log('[Auth] Falling back to cached local storage');
       }
     };
 
@@ -72,15 +75,20 @@ export default function App() {
     const refreshData = () => {
       if (typeof chrome !== 'undefined' && chrome.storage) {
         chrome.storage.local.get(['realtime_stats', 'starknet_address', 'delegated_amount'], (res) => {
+          console.log('[Storage] Current data:', res);
+          
           if (res.realtime_stats) {
             setGlobalStats(res.realtime_stats as RealtimeStats);
           }
+          
           if (res.starknet_address) {
             setSyncAddress(res.starknet_address as string);
-            // Verify with backend when we have an address
+            // CRITICAL: Always verify with backend when we detect an address
+            // This ensures the extension gets the latest delegation state
             verifyAuth(res.starknet_address as string);
           }
-          // Add this to track authorization
+          
+          // Set initial values from cache (will be updated by verifyAuth)
           if (res.delegated_amount !== undefined) {
             setDelegatedAmount(Number(res.delegated_amount));
             setHasDelegated(Number(res.delegated_amount) >= 1);

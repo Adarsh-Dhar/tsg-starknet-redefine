@@ -159,6 +159,7 @@ router.post('/ingest/realtime', dataRateLimiter, async (req, res) => {
         if (currentMilestone > lastSlashedMilestone && currentMilestone <= 100) {
             const jumps = currentMilestone - lastSlashedMilestone;
             const totalPenalty = jumps * 0.01;
+            // Trigger the slash with the calculated amount
             await slashQueue.add('execute-penalty', {
                 walletAddress,
                 amount: totalPenalty

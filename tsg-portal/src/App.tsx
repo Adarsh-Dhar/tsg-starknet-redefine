@@ -96,6 +96,13 @@ function App() {
         refreshBalance();
       }, 10000);
       return () => clearInterval(interval);
+    } else if (!isConnected) {
+      // Clear storage on disconnect
+      if (typeof chrome !== 'undefined' && chrome.storage) {
+        chrome.storage.local.remove(['starknet_address', 'delegated_amount'], () => {
+          console.log("Portal: Cleared storage on disconnect");
+        });
+      }
     }
   }, [isConnected, address]);
 
@@ -137,6 +144,31 @@ function App() {
       if (!txHash) throw new Error("No transaction hash returned.");
       
       await account.waitForTransaction(txHash);
+      
+      // Sync delegation with backend database
+      if (type === 'delegate') {
+        try {
+          const syncResponse = await fetch('http://localhost:3333/api/delegate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              address: address,
+              amount: parseFloat(amount),
+              txHash: txHash
+            })
+          });
+          
+          if (!syncResponse.ok) {
+            console.error('Failed to sync delegation with backend:', await syncResponse.text());
+          } else {
+            console.log('Delegation synced with backend successfully');
+          }
+        } catch (syncError) {
+          console.error('Error syncing with backend:', syncError);
+          // Don't fail the whole transaction if backend sync fails
+        }
+      }
+      
       // Add a short delay before refreshing balance to allow contract state to update
       setTimeout(async () => {
         await refreshBalance();

@@ -42,6 +42,32 @@ export default function App() {
       setIsExtension(isExtProtocol || isSidePanelWidth);
     };
 
+    // Verify delegation status from backend API
+    const verifyAuth = async (address: string) => {
+      try {
+        const response = await fetch(`http://localhost:3333/api/delegate/status/${address}`);
+        const data = await response.json();
+        
+        if (data.success) {
+          // Update local state based on DB truth
+          setDelegatedAmount(data.amountDelegated);
+          setHasDelegated(data.isDelegated);
+          
+          // Cache in local storage for instant loading next time
+          if (typeof chrome !== 'undefined' && chrome.storage) {
+            chrome.storage.local.set({ 
+              delegated_amount: data.amountDelegated 
+            }, () => {
+              console.log("Frontend: Synced delegation data from backend");
+            });
+          }
+        }
+      } catch (err) {
+        console.error("DB verification failed", err);
+        // Fallback to local storage if backend is unavailable
+      }
+    };
+
     // Initial Data Fetch from Extension Storage
     const refreshData = () => {
       if (typeof chrome !== 'undefined' && chrome.storage) {
@@ -51,6 +77,8 @@ export default function App() {
           }
           if (res.starknet_address) {
             setSyncAddress(res.starknet_address as string);
+            // Verify with backend when we have an address
+            verifyAuth(res.starknet_address as string);
           }
           // Add this to track authorization
           if (res.delegated_amount !== undefined) {
@@ -70,6 +98,13 @@ export default function App() {
     
     // Setup Storage & Message listeners
     refreshData();
+
+    // Poll backend for delegation status every 30 seconds
+    const pollInterval = setInterval(() => {
+      if (syncAddress) {
+        verifyAuth(syncAddress);
+      }
+    }, 30000);
 
     let messageListener: ((msg: any) => void) | undefined;
     let addedRuntimeListener = false;
@@ -91,6 +126,7 @@ export default function App() {
 
     return () => {
       window.removeEventListener('resize', checkEnvironment);
+      clearInterval(pollInterval);
       if (addedRuntimeListener && messageListener && chrome.runtime && typeof chrome.runtime.onMessage.removeListener === 'function') {
         chrome.runtime.onMessage.removeListener(messageListener);
       }
@@ -98,7 +134,7 @@ export default function App() {
         chrome.storage.onChanged.removeListener(refreshData);
       }
     };
-  }, []);
+  }, [syncAddress]);
 
   return (
     <Router>

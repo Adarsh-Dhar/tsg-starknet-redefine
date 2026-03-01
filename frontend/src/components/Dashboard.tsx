@@ -16,7 +16,7 @@ interface DashboardProps {
   hasDelegated?: boolean;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ brainrotScore, syncAddress, delegatedAmount, hasDelegated }) => {
+const Dashboard: React.FC<DashboardProps> = ({ brainrotScore, syncAddress, delegatedAmount = 0, hasDelegated }) => {
   const { isConnected, address } = useAccount();
   const [displayScore, setDisplayScore] = useState<number>(brainrotScore);
 
@@ -33,15 +33,32 @@ const Dashboard: React.FC<DashboardProps> = ({ brainrotScore, syncAddress, deleg
     }
   }, [brainrotScore, displayScore]);
 
+  // AUTHORIZATION GATE: Must have address AND >= 1 STRK
+  const isAuthorized = !!syncAddress && delegatedAmount >= 1;
 
-  // --- AUTHORIZATION GATE ---
-  const isAuthorized = syncAddress && (typeof delegatedAmount === 'number' ? delegatedAmount >= 1 : hasDelegated);
   if (!isAuthorized) {
     return (
-      <div className="flex flex-col items-center justify-center p-10 space-y-6">
-        <h2 className="text-xl font-bold text-emerald-400">Connect to Start</h2>
-        <a href="http://localhost:5174/" target="_blank" rel="noopener noreferrer">
-          <WalletPage minimal />
+      <div className="flex flex-col items-center justify-center h-full p-6 text-center space-y-6 animate-in fade-in">
+        <div className="w-20 h-20 bg-emerald-500/10 rounded-full flex items-center justify-center border border-emerald-500/20">
+          <Lock className="w-10 h-10 text-emerald-500" />
+        </div>
+        <div className="space-y-2">
+          <h2 className="text-xl font-black text-white uppercase tracking-tighter">Vault Access Required</h2>
+          <p className="text-[10px] text-emerald-500/60 leading-relaxed uppercase font-bold">
+            Stake 1.00+ STRK to unlock neural analytics
+          </p>
+        </div>
+        <div className="p-4 rounded-xl bg-slate-900 border border-emerald-500/10 w-full shadow-inner">
+          <p className="text-[9px] text-emerald-500/40 uppercase font-black mb-1 tracking-widest">Current Stake</p>
+          <p className="text-lg font-mono font-bold text-white">{delegatedAmount.toFixed(2)} / 1.00 STRK</p>
+        </div>
+        <a 
+          href="http://localhost:5174" 
+          target="_blank" 
+          rel="noopener noreferrer" 
+          className="w-full py-3 bg-emerald-500 text-slate-950 font-black rounded-xl hover:bg-emerald-400 transition-all uppercase text-xs"
+        >
+          Open Portal
         </a>
       </div>
     );

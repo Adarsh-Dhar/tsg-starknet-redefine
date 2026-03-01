@@ -4,6 +4,7 @@ import slashRouter from './routes/slash/route.js';
 import vaultRouter from './routes/vault/route.js';
 import dataRouter, { dataRateLimiter } from './routes/data/route.js';
 import delegateRouter from './routes/delegate/route.js';
+import authRouter from './routes/auth.js';
 
 const app = express();
 const PORT = 3333;
@@ -22,6 +23,7 @@ app.use('/api/slash', slashRouter); // /api/slash/*
 app.use('/api/vault', vaultRouter); // /api/vault/*
 app.use('/api/data', dataRateLimiter, dataRouter); // /api/data/*
 app.use('/api/delegate', delegateRouter); // /api/delegate/*
+app.use('/api/auth', authRouter); // /api/auth/*
 
 app.listen(PORT, () => {
   console.log(`Server is live at http://localhost:${PORT}`);

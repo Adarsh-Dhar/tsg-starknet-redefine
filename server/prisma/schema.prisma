@@ -10,10 +10,21 @@ generator client {
   provider = "prisma-client-js"
 }
 
+// server/prisma/schema.prisma
+
+model User {
+  id            String      @id @default(cuid())
+  email         String      @unique
+  password      String      // Hashed
+  starknetAddr  String?     @unique
+  delegation    Delegation? @relation(fields: [starknetAddr], references: [address])
+}
+
 model Delegation {
   id              String   @id @default(cuid())
-  address         String   @unique // Starknet Contract Address
+  address         String   @unique
   amountDelegated Float    @default(0.0)
   lastUpdated     DateTime @default(now()) @updatedAt
-  lastTxHash      String?  // Store the last verified transaction hash
+  lastTxHash      String?
+  user            User?
 }

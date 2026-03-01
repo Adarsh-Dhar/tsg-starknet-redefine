@@ -3,10 +3,12 @@ import { GRAVITY_VAULT_ABI } from './abi';
 import { Wallet, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { useAccount, useConnect, useDisconnect } from "@starknet-react/core";
 import { uint256, Contract, Abi } from 'starknet';
+import { useAuth } from './hooks/useAuth';
 
 const VAULT_ADDRESS = "0x0602c5436e8dc621d2003f478d141a76b27571d29064fbb9786ad21032eb4769";
 const STRK_TOKEN_ADDRESS = "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
-const EXTENSION_ID = "khehdcnoacelhjahplhodneiomdlbmed"; 
+const EXTENSION_ID = "khehdcnoacelhjahplhodneiomdlbmed";
+const API_BASE_URL = 'http://localhost:3333/api'; 
 
 interface WalletPageProps {
   minimal?: boolean;
@@ -16,11 +18,12 @@ export default function WalletPage({ minimal = false }: WalletPageProps) {
   const { address, account, isConnected } = useAccount();
   const { connect, connectors } = useConnect();
   const { disconnect } = useDisconnect();
+  const { user, token, fetchUserInfo } = useAuth();
   const [amount, setAmount] = useState('');
   const [loading, setLoading] = useState(false);
-  // Removed pubKey state, not needed for sidebar sync
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
   const [manualAddress, setManualAddress] = useState("");
+  const [delegationTxHash, setDelegationTxHash] = useState<string | null>(null);
 
   // Check for address in URL params on mount
   useEffect(() => {
@@ -103,34 +106,67 @@ export default function WalletPage({ minimal = false }: WalletPageProps) {
       chrome.storage.local.set({ starknet_address: manualAddress }, () => {
         console.log("Manual sync - Address saved to extension storage:", manualAddress);
         
-        // Immediately verify with backend
-        fetch(`http://localhost:3333/api/delegate/status/${manualAddress}`)
-          .then(res => res.json())
-          .then(data => {
-            if (data.success && data.amountDelegated > 0) {
-              alert(`✅ Address synced! Found ${data.amountDelegated} STRK delegated. The dashboard will now update.`);
-            } else {
-              alert("✅ Address synced! No delegation found yet. Delegate tokens on the portal first.");
-            }
-          })
-          .catch(() => {
-            alert("Address synced to extension! (Could not verify with backend - make sure server is running)");
-          });
-        
-        setManualAddress("");
-        window.location.hash = "/"; // Redirect to dashboard
+        // Link wallet to authenticated user account
+        linkWalletToAccount(manualAddress);
       });
     } else {
       alert("Please enter a valid Starknet address (starting with 0x)");
     }
   };
 
+  // Link wallet address to user account in database
+  const linkWalletToAccount = async (walletAddress: string) => {
+    if (!token) {
+      alert("Not authenticated. Please login first.");
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/link-wallet`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ starknetAddr: walletAddress })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        alert(`Error linking wallet: ${data.error}`);
+        return;
+      }
+
+      // Verify delegation status with backend
+      fetch(`${API_BASE_URL}/delegate/status/${walletAddress}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.success && data.amountDelegated > 0) {
+            alert(`✅ Wallet linked! Found ${data.amountDelegated} STRK delegated.`);
+          } else {
+            alert("✅ Wallet linked! Proceed to delegate tokens on the portal.");
+          }
+          // Refresh user info
+          fetchUserInfo();
+          setManualAddress("");
+        })
+        .catch((err) => {
+          console.error('Backend verification failed:', err);
+          alert("Wallet linked! (Server connection issue, delegation will update once verified)");
+          setManualAddress("");
+        });
+    } catch (err: any) {
+      alert(`Failed to link wallet: ${err.message}`);
+    }
+  };
+
   const handleDelegate = async () => {
-    if (!account || !amount) return;
+    if (!account || !amount || !user || !token) return;
     setLoading(true);
     try {
       const amountInWei = uint256.bnToUint256(BigInt(Math.floor(parseFloat(amount) * 10 ** 18)));
-      await account.execute([
+      const txResponse = await account.execute([
         { 
           contractAddress: STRK_TOKEN_ADDRESS, 
           entrypoint: "approve", 
@@ -142,11 +178,51 @@ export default function WalletPage({ minimal = false }: WalletPageProps) {
           calldata: [amountInWei.low, amountInWei.high] 
         }
       ]);
+
+      // Store tx hash temporarily
+      if (txResponse && typeof txResponse === 'string') {
+        setDelegationTxHash(txResponse);
+        
+        // Notify backend of delegation
+        notifyDelegation(user.starknetAddr || address, parseFloat(amount), txResponse);
+      }
+
+      alert("✅ Delegation transaction submitted! Check the portal for status.");
+      setAmount('');
     } catch (e) {
       console.error("Delegate error:", e);
-      alert("Transaction Failed");
+      alert("Transaction Failed. Please try again.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Notify backend of delegation transaction
+  const notifyDelegation = async (walletAddress: string | null, amount: number, txHash: string) => {
+    if (!walletAddress || !token) return;
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/delegate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          address: walletAddress,
+          amount: amount,
+          txHash: txHash
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Delegation recorded:', data);
+        // Refresh user info to update delegation status
+        await fetchUserInfo();
+      }
+    } catch (err) {
+      console.error('Failed to notify delegation:', err);
     }
   };
 

@@ -33,7 +33,6 @@ export default function WalletPage({ minimal = false }: WalletPageProps) {
       setManualAddress(urlAddress);
       // Auto-sync if address is in URL
       chrome.storage.local.set({ starknet_address: urlAddress }, () => {
-        console.log("Auto-synced address from URL:", urlAddress);
       });
     }
   }, []);
@@ -41,7 +40,6 @@ export default function WalletPage({ minimal = false }: WalletPageProps) {
   const syncWithExtension = async () => {
     if (!isConnected || !address || !account) return;
     setSyncStatus('syncing');
-    console.log("WalletPage: Starting Sync...");
 
     try {
       // 1. Fetch Public Key directly via high-level contract call
@@ -62,7 +60,6 @@ export default function WalletPage({ minimal = false }: WalletPageProps) {
         const res = await contract.getPublicKey();
         fetchedPk = res.toString();
       }
-      console.log("WalletPage: PK Found:", fetchedPk);
 
       // 2. Sync with Sidebar via Message
       if (window.chrome && chrome.runtime?.sendMessage) {
@@ -75,7 +72,6 @@ export default function WalletPage({ minimal = false }: WalletPageProps) {
             console.error("Sync Failed:", chrome.runtime.lastError.message);
             setSyncStatus('error');
           } else {
-            console.log("✅ Sync Success acknowledged by sidebar");
             setSyncStatus('success');
           }
         });
@@ -104,7 +100,6 @@ export default function WalletPage({ minimal = false }: WalletPageProps) {
   const handleManualSync = () => {
     if (manualAddress.startsWith("0x")) {
       chrome.storage.local.set({ starknet_address: manualAddress }, () => {
-        console.log("Manual sync - Address saved to extension storage:", manualAddress);
         
         // Link wallet to authenticated user account
         linkWalletToAccount(manualAddress);
@@ -223,7 +218,6 @@ export default function WalletPage({ minimal = false }: WalletPageProps) {
 
       if (response.ok) {
         const data = await response.json();
-        console.log('Delegation recorded:', data);
         // Refresh user info to update delegation status
         await fetchUserInfo();
       }

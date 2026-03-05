@@ -50,15 +50,12 @@ export default function LoginPage() {
 		setLoading(true);
 
 		try {
-			console.log(`[LoginPage] Starting ${mode}...`);
 			
 			// Use the useAuth hook's login/signup functions
 			if (mode === 'login') {
 				await authLogin(email, password);
-				console.log('[LoginPage] ✅ Login successful!');
 			} else {
 				await authSignup(email, password);
-				console.log('[LoginPage] ✅ Signup successful!');
 			}
 			
 			// Clear form
@@ -68,7 +65,6 @@ export default function LoginPage() {
 			
 			// Auth state is now updated, App.tsx will automatically show authenticated view
 			setLoading(false);
-			console.log('[LoginPage] ✅ Auth complete, App will handle view transition');
 		} catch (err: any) {
 			setError(err.message || `Failed to ${mode}`);
 			setLoading(false);

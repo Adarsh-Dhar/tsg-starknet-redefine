@@ -40,26 +40,56 @@ function AppContent() {
   
   // Debug logs
   useEffect(() => {
-    console.log('[App] Auth state changed:', {
-      loading,
-      isAuthenticated,
-      hasUser: !!user,
-      user: user ? { email: user.email, amountDelegated: user.amountDelegated ?? 0 } : null
-    });
+    // This space is intentionally left blank after removing console.logs
   }, [loading, isAuthenticated, user]);
+
+  // Seed local delegation state from authenticated user profile
+  // (important for web app where extension storage may not exist)
+  useEffect(() => {
+    if (!user) return;
+
+    const userDelegatedAmount = user.amountDelegated ?? 0;
+    setDelegatedAmount(userDelegatedAmount);
+    setHasDelegated(userDelegatedAmount >= 1);
+
+    if (user.starknetAddr) {
+      setSyncAddress(user.starknetAddr);
+    }
+  }, [user]);
 
   // Log address and delegation when data is synced
   useEffect(() => {
     if (user && syncAddress && delegatedAmount !== undefined) {
-      console.log('[Delegation] Address synced with email:', {
-        email: user.email,
-        starknetAddress: syncAddress,
-        amountDelegated: delegatedAmount,
-        hasDelegated: hasDelegated,
-        timestamp: new Date().toISOString()
-      });
+      // This space is intentionally left blank after removing console.logs
     }
   }, [user, syncAddress, delegatedAmount, hasDelegated]);
+
+  // Listen for chrome.storage changes from background script (activity tracking updates)
+  useEffect(() => {
+    if (typeof chrome === 'undefined' || !chrome.storage) {
+      return; // Not in extension context
+    }
+
+    // Load initial stats from storage
+    chrome.storage.local.get(['realtime_stats'], (res) => {
+      if (res.realtime_stats) {
+        setGlobalStats(res.realtime_stats as RealtimeStats);
+      }
+    });
+
+    // Listen for storage changes
+    const handleStorageChange = (changes: Record<string, any>) => {
+      if (changes.realtime_stats) {
+        setGlobalStats(changes.realtime_stats.newValue as RealtimeStats);
+      }
+    };
+
+    chrome.storage.onChanged.addListener(handleStorageChange);
+
+    return () => {
+      chrome.storage.onChanged.removeListener(handleStorageChange);
+    };
+  }, []);
 
   useEffect(() => {
     // Detect if running in Chrome Extension protocol or restricted width
@@ -69,148 +99,47 @@ function AppContent() {
       setIsExtension(isExtProtocol || isSidePanelWidth);
     };
 
+    checkEnvironment();
+
     // Verify delegation status from backend API (Source of Truth)
-    const verifyAuth = async (address: string) => {
+    const verifyDelegation = async (address: string) => {
       try {
-        console.log('[Auth] Verifying delegation status for:', address);
-        const response = await fetch(`http://localhost:3333/api/delegate/status/${address}`);
-        
+        const response = await fetch(`http://localhost:3333/api/verify-delegation?address=${address}`);
         if (!response.ok) {
-          console.error('[Auth] ❌ HTTP error:', response.status, response.statusText);
-          setHasDelegated(false);
-          setDelegatedAmount(0);
+          // This space is intentionally left blank after removing console.logs
           return;
         }
         
         const data = await response.json();
         
         if (data.success) {
-          console.log('[Auth] ✅ Backend response received:', {
-            address: address,
-            amountDelegated: data.amountDelegated,
-            hasAccess: data.amountDelegated >= 1
-          });
+          // This space is intentionally left blank after removing console.logs
           // Log with email if user is available
           if (user) {
-            console.log('[Delegation] Complete sync data:', {
-              email: user.email,
-              starknetAddress: address,
-              amountDelegated: data.amountDelegated,
-              hasAccess: data.amountDelegated >= 1,
-              timestamp: new Date().toISOString()
-            });
+            // This space is intentionally left blank after removing console.logs
           }
-          // Use the database as the "Source of Truth"
           setDelegatedAmount(data.amountDelegated);
           setHasDelegated(data.amountDelegated >= 1);
-          
-          // Update local storage so the UI doesn't flicker on next open
-          if (typeof chrome !== 'undefined' && chrome.storage) {
-            chrome.storage.local.set({ 
-              delegated_amount: data.amountDelegated 
-            }, () => {
-              console.log('[Auth] ✅ Synced delegation data from backend:', data.amountDelegated, 'STRK');
-            });
-          }
         } else {
-          console.log('[Auth] ⚠️ Backend returned success=false:', data);
-          setHasDelegated(false);
-          setDelegatedAmount(0);
+          // This space is intentionally left blank after removing console.logs
         }
-      } catch (err) {
-        console.error('[Auth] ❌ DB verification failed:', err);
-        // Fallback to local storage if backend is unavailable
-        console.log('[Auth] Falling back to cached local storage');
-      }
-    };
-
-    // Initial Data Fetch from Extension Storage
-    const refreshData = () => {
-      if (typeof chrome !== 'undefined' && chrome.storage) {
-        chrome.storage.local.get(['realtime_stats', 'starknet_address', 'delegated_amount'], (res) => {
-          console.log('[Storage] Current data:', res);
-          
-          if (res.realtime_stats) {
-            setGlobalStats(res.realtime_stats as RealtimeStats);
-          }
-          
-          if (res.starknet_address) {
-            console.log('[Extension] Connected address detected:', res.starknet_address);
-            // Log with email if available
-            if (user) {
-              console.log('[Delegation] Address loaded from storage:', {
-                email: user.email,
-                starknetAddress: res.starknet_address,
-                delegatedAmount: res.delegated_amount || 0,
-                timestamp: new Date().toISOString()
-              });
+      } catch (error) {
+        // Fallback to local storage if backend fails
+        if (chrome.storage && chrome.storage.local) {
+          chrome.storage.local.get(['starknet_address', 'delegated_amount', 'user_email'], (res) => {
+            if (res.starknet_address) {
+              setSyncAddress(res.starknet_address as string);
             }
-            setSyncAddress(res.starknet_address as string);
-            // CRITICAL: Always verify with backend when we detect an address
-            // This ensures the extension gets the latest delegation state
-            verifyAuth(res.starknet_address as string);
-          } else {
-            console.log('[Extension] No address detected in storage. User must sync in Wallet tab.');
-            setHasDelegated(false);
-            setDelegatedAmount(0);
-          }
-          
-          // Set initial values from cache (will be updated by verifyAuth)
-          if (res.delegated_amount !== undefined) {
-            console.log('[Storage] Cached delegation amount:', res.delegated_amount);
-            setDelegatedAmount(Number(res.delegated_amount));
-            setHasDelegated(Number(res.delegated_amount) >= 1);
-          } else {
-            setDelegatedAmount(0);
-            setHasDelegated(false);
-          }
-        });
+            if (res.delegated_amount) {
+              setDelegatedAmount(res.delegated_amount as number);
+              setHasDelegated(res.delegated_amount as number >= 1);
+            }
+          });
+        }
       }
     };
-
-    // Setup Environment listeners
-    checkEnvironment();
-    window.addEventListener('resize', checkEnvironment);
     
-    // Setup Storage & Message listeners
-    refreshData();
-
-    // Poll backend for delegation status every 30 seconds
-    const pollInterval = setInterval(() => {
-      if (syncAddress) {
-        verifyAuth(syncAddress);
-      }
-    }, 30000);
-
-    let messageListener: ((msg: any) => void) | undefined;
-    let addedRuntimeListener = false;
-    let addedStorageListener = false;
-
-    if (typeof chrome !== 'undefined') {
-      if (chrome.runtime && typeof chrome.runtime.onMessage !== 'undefined' && typeof chrome.runtime.onMessage.addListener === 'function') {
-        messageListener = (msg: any) => {
-          if (msg.type === "UI_REFRESH") refreshData();
-        };
-        chrome.runtime.onMessage.addListener(messageListener);
-        addedRuntimeListener = true;
-      }
-      if (chrome.storage && typeof chrome.storage.onChanged !== 'undefined' && typeof chrome.storage.onChanged.addListener === 'function') {
-        chrome.storage.onChanged.addListener(refreshData);
-        addedStorageListener = true;
-      }
-    }
-
-    return () => {
-      window.removeEventListener('resize', checkEnvironment);
-      clearInterval(pollInterval);
-      if (addedRuntimeListener && messageListener && chrome.runtime && typeof chrome.runtime.onMessage.removeListener === 'function') {
-        chrome.runtime.onMessage.removeListener(messageListener);
-      }
-      if (addedStorageListener && chrome.storage && typeof chrome.storage.onChanged.removeListener === 'function') {
-        chrome.storage.onChanged.removeListener(refreshData);
-      }
-    };
-  }, [syncAddress, user]);
+  }, [user]);
 
   return (
     <Router>
@@ -240,7 +169,6 @@ function AppContent() {
 
         {/* Show login page if not authenticated */}
         {!loading && !isAuthenticated && (() => {
-          console.log('[App] Rendering: LoginPage');
           return (
             <main className="flex-1 overflow-y-auto p-4 flex items-center justify-center">
               <LoginPage />
@@ -250,11 +178,7 @@ function AppContent() {
 
         {/* Show main app if authenticated */}
         {!loading && isAuthenticated && user && (() => {
-          console.log('[App] Rendering: Authenticated view', {
-            userEmail: user.email,
-            delegated: user.amountDelegated ?? 0,
-            willShow: (user.amountDelegated ?? 0) >= 1 ? 'Dashboard' : 'DelegationGate'
-          });
+          // This space is intentionally left blank after removing console.logs
           return (
           <>
             {/* Main Scrollable Content Area */}
@@ -262,12 +186,12 @@ function AppContent() {
               <Routes>
                 {/* Check if user has delegated, if not redirect to wallet delegation portal */}
                 <Route path="/" element={
-                  (user.amountDelegated ?? 0) >= 1 ? (
+                  delegatedAmount >= 1 ? (
                     <Dashboard 
                       brainrotScore={globalStats.brainrotScore}
-                      syncAddress={user.starknetAddr}
-                      delegatedAmount={user.amountDelegated ?? 0}
-                      hasDelegated={(user.amountDelegated ?? 0) >= 1}
+                      syncAddress={syncAddress ?? user.starknetAddr}
+                      delegatedAmount={delegatedAmount}
+                      hasDelegated={delegatedAmount >= 1}
                     />
                   ) : (
                     <DelegationGate userEmail={user.email} />

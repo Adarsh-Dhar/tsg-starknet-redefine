@@ -1,8 +1,7 @@
-
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAccount, useBalance } from "@starknet-react/core";
 import WalletPage from '../WalletPage';
-import { Zap, Flame, Brain, TrendingUp, Lock } from 'lucide-react';
+import { Zap, Flame, Brain, TrendingUp, Lock, RotateCcw } from 'lucide-react';
 import Progress from './ui/progress';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Contract, uint256, RpcProvider, type Abi } from 'starknet';
@@ -26,12 +25,14 @@ const Dashboard: React.FC<DashboardProps> = ({ brainrotScore, syncAddress, deleg
   const [displayScore, setDisplayScore] = useState<number>(brainrotScore);
   const [contractDelegatedAmount, setContractDelegatedAmount] = useState<number>(delegatedAmount);
   const [isLoadingBalance, setIsLoadingBalance] = useState(false);
+  const initialDelegatedAmountRef = useRef<number>(delegatedAmount);
+  const lastPersistedAmountRef = useRef<number>(delegatedAmount);
+  const previousScoreBucketRef = useRef<number>(Math.floor(brainrotScore / 100));
 
   // Fetch actual delegated amount from smart contract
   useEffect(() => {
     const fetchContractBalance = async () => {
       if (!syncAddress) {
-        console.log('[Dashboard] Skipping contract balance fetch: no syncAddress');
         return;
       }
 
@@ -39,9 +40,14 @@ const Dashboard: React.FC<DashboardProps> = ({ brainrotScore, syncAddress, deleg
       const isExtension = typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id;
       
       if (isExtension) {
-        // In extension, use the database value passed via props
-        console.log('[Dashboard] Using database value in extension context:', delegatedAmount);
-        setContractDelegatedAmount(delegatedAmount);
+        // In extension, only initialize once from the FIRST delegatedAmount prop received
+        // Use ref to prevent re-initialization when prop updates from backend
+        if (contractDelegatedAmount === delegatedAmount && initialDelegatedAmountRef.current === delegatedAmount) {
+          // First initialization - store the initial amount
+          setContractDelegatedAmount(delegatedAmount);
+        }
+        // If contractDelegatedAmount differs from current delegatedAmount prop, don't reset it
+        // This allows tokenomics to control the value
         return;
       }
 
@@ -56,13 +62,11 @@ const Dashboard: React.FC<DashboardProps> = ({ brainrotScore, syncAddress, deleg
           providerOrAccount: rpcProvider
         });
 
-        console.log('[Dashboard] Fetching contract balance for:', syncAddress);
         const result = await vault.get_balance(syncAddress);
         
         if (result) {
           const amountBigInt = uint256.uint256ToBN(result);
           const amount = Number(amountBigInt) / 10 ** 18;
-          console.log('[Dashboard] Contract balance fetched:', amount);
           setContractDelegatedAmount(amount);
         }
       } catch (error) {
@@ -75,20 +79,14 @@ const Dashboard: React.FC<DashboardProps> = ({ brainrotScore, syncAddress, deleg
     };
 
     fetchContractBalance();
-    // Refresh every 10 seconds
+    // Refresh every 10 seconds (only in web app context)
     const interval = setInterval(fetchContractBalance, 10000);
     return () => clearInterval(interval);
   }, [syncAddress, delegatedAmount]);
 
   // Log current state
   useEffect(() => {
-    console.log('[Dashboard] Current state:', {
-      syncAddress: syncAddress,
-      delegatedAmount: delegatedAmount,
-      contractDelegatedAmount: contractDelegatedAmount,
-      hasDelegated: hasDelegated,
-      isAuthorized: !!syncAddress && contractDelegatedAmount >= 1
-    });
+    // This space is intentionally left blank after removing console.logs
   }, [syncAddress, delegatedAmount, contractDelegatedAmount, hasDelegated]);
 
   useEffect(() => {
@@ -103,6 +101,108 @@ const Dashboard: React.FC<DashboardProps> = ({ brainrotScore, syncAddress, deleg
       return () => clearTimeout(timer);
     }
   }, [brainrotScore, displayScore]);
+
+  // Tokenomics rule:
+  // - every +100 score: subtract (current delegated / 100)
+  // - every -100 score: add (current delegated / 100)
+  useEffect(() => {
+    const currentBucket = Math.floor(brainrotScore / 100);
+    const previousBucket = previousScoreBucketRef.current;
+
+    if (currentBucket === previousBucket) {
+      return;
+    }
+
+    const bucketDelta = currentBucket - previousBucket;
+    const movedBuckets = Math.abs(bucketDelta);
+
+    setContractDelegatedAmount((currentAmount) => {
+      if (currentAmount <= 0) {
+        return 0;
+      }
+
+      const tokenPer100 = currentAmount / 100;
+      const totalTokenDelta = movedBuckets * tokenPer100 * (bucketDelta > 0 ? -1 : 1);
+      const nextAmount = Math.max(0, currentAmount + totalTokenDelta);
+
+      return nextAmount;
+    });
+
+    previousScoreBucketRef.current = currentBucket;
+  }, [brainrotScore]);
+
+  // Execute real STRK transfer when delegated amount decreases (score bucket crossed)
+  useEffect(() => {
+    if (!syncAddress) return;
+    
+    // Only proceed if the amount actually changed
+    const amountChanged = Math.abs(contractDelegatedAmount - lastPersistedAmountRef.current) > 0.0001;
+    if (!amountChanged) return;
+
+    // Calculate transfer amount (how much STRK is being removed from delegation)
+    const transferAmount = lastPersistedAmountRef.current - contractDelegatedAmount;
+    
+    // Only execute transfer if amount decreased (delegation reduced)
+    if (transferAmount <= 0.0001) return;
+
+    const executeTransfer = async () => {
+      try {
+        console.log(`[Dashboard] Executing STRK transfer: ${transferAmount.toFixed(6)} STRK from ${syncAddress}`);
+        
+        // Call backend to execute the STRK transfer
+        const response = await fetch('http://localhost:3333/api/transfer/strk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fromAddress: syncAddress,
+            toAddress: syncAddress, // Transfer to self (or treasury if configured)
+            amount: Number(transferAmount.toFixed(6))
+          })
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('[Dashboard] Failed to execute STRK transfer:', response.status, errorText);
+          return;
+        }
+
+        const data = await response.json();
+        const realTxHash = data.transactionHash;
+
+        console.log(`[Dashboard] STRK transfer successful. TX Hash: ${realTxHash}`);
+
+        // Now persist the delegation with the real transaction hash
+        const persistResponse = await fetch('http://localhost:3333/api/delegate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            address: syncAddress,
+            amount: Number(contractDelegatedAmount.toFixed(6)),
+            txHash: realTxHash
+          })
+        });
+
+        if (!persistResponse.ok) {
+          console.error('[Dashboard] Failed to persist delegation with tx hash:', persistResponse.status);
+          return;
+        }
+
+        // Update ref to track this as persisted
+        lastPersistedAmountRef.current = contractDelegatedAmount;
+
+        if (typeof chrome !== 'undefined' && chrome.storage) {
+          chrome.storage.local.set({ delegated_amount: contractDelegatedAmount });
+        }
+
+        console.log(`[Dashboard] Delegation updated: ${contractDelegatedAmount.toFixed(6)} STRK with TX: ${realTxHash}`);
+
+      } catch (error) {
+        console.error('[Dashboard] Error executing STRK transfer:', error);
+      }
+    };
+
+    executeTransfer();
+  }, [contractDelegatedAmount, syncAddress]);
 
   // AUTHORIZATION GATE: Must have address AND >= 1 STRK (from contract)
   const isAuthorized = !!syncAddress && contractDelegatedAmount >= 1;
@@ -146,6 +246,20 @@ const Dashboard: React.FC<DashboardProps> = ({ brainrotScore, syncAddress, deleg
   const status = getStatus(displayScore);
   const percentage = Math.min((displayScore / 10000) * 100, 100);
 
+  const handleResetScore = () => {
+    if (window.confirm('Reset brainrot score to 0?')) {
+      chrome.storage.local.set({ 
+        realtime_stats: { 
+          brainrotScore: 0, 
+          screenTimeMinutes: 0 
+        } 
+      }, () => {
+        // Force UI update
+        window.location.reload();
+      });
+    }
+  };
+
   // Responsive grid: 1 column for popup, 2 columns for webapp
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in duration-500">
@@ -154,6 +268,14 @@ const Dashboard: React.FC<DashboardProps> = ({ brainrotScore, syncAddress, deleg
         <h2 className="text-[10px] font-mono uppercase tracking-[0.3em] text-emerald-500/50">Neural Load</h2>
         <div className={`text-7xl font-black tracking-tighter tabular-nums ${status.color}`}>{displayScore.toLocaleString()}</div>
         <div className={`flex items-center gap-2 text-xs font-bold uppercase ${status.color}`}>{status.icon} {status.label}</div>
+        <button
+          onClick={handleResetScore}
+          className="mt-3 px-3 py-1 text-[9px] font-bold uppercase rounded-lg bg-slate-800 hover:bg-slate-700 transition-colors flex items-center gap-1 text-slate-400 hover:text-slate-200"
+          title="Reset score to 0"
+        >
+          <RotateCcw size={12} />
+          Reset
+        </button>
       </div>
       {/* Stats/Progress Card */}
       <Card className="border-emerald-500/20 bg-slate-900/40 backdrop-blur-md">

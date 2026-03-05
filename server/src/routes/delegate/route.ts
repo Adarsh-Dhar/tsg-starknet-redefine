@@ -37,10 +37,12 @@ router.post('/', async (req: Request, res: Response) => {
 
     console.log(`[Delegate] New delegation request: address=${address}, amount=${amount}, txHash=${txHash}${email ? `, email=${email}` : ''}`);
 
-    // Skip verification for balance refreshes from the portal
+    // Skip verification for balance refreshes and simulated transfers
     const isBalanceRefresh = txHash === 'manual_refresh';
+    // Simulated/queued hashes are 0x + hex chars (64 or 66 total length)
+    const isSimulatedTransfer = txHash.startsWith('0x') && (txHash.length === 64 || txHash.length === 66);
     
-    if (!isBalanceRefresh) {
+    if (!isBalanceRefresh && !isSimulatedTransfer) {
       // Verify the transaction on-chain only for real transactions
       const isValid = await verifyDelegationTransaction(
         txHash,
@@ -55,6 +57,8 @@ router.post('/', async (req: Request, res: Response) => {
           message: 'The transaction could not be verified on-chain. Please check the transaction hash.',
         });
       }
+    } else if (isSimulatedTransfer) {
+      console.log(`[Delegate] Simulated transfer - skipping on-chain verification for ${txHash}`);
     } else {
       console.log(`[Delegate] Balance refresh request - skipping on-chain verification`);
     }

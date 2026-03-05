@@ -73,6 +73,105 @@ chrome.runtime.onConnect.addListener((port) => {
     console.warn("⚠️ TSG: Content script port disconnected.");
   });
 });
+
+// Handle messages from content scripts (via chrome.runtime.sendMessage)
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  try {
+    console.log("ℹ️ TSG BG: Message received", msg?.type, "from", sender?.url);
+    
+    if (!msg) {
+      console.error("❌ TSG BG: Message is null or undefined");
+      sendResponse({ success: false, error: "Message is null" });
+      return true;
+    }
+
+    if (msg.type === "YOUTUBE_ACTIVITY") {
+      console.log(`%c✅ TSG: Received activity report: ${msg.duration}s from ${sender.url}`, "color: #10b981; font-weight: bold;");
+      
+      chrome.storage.local.get(['realtime_stats', 'starknet_address'], (res) => {
+        try {
+          let stats = res.realtime_stats || { brainrotScore: 0, screenTimeMinutes: 0 };
+
+          // Calculate and update locally IMMEDIATELY
+          const pointsPerSecond = 8;
+          const increment = msg.duration * pointsPerSecond;
+          const oldScore = stats.brainrotScore;
+          stats.brainrotScore = Math.min(stats.brainrotScore + increment, 10000);
+          stats.screenTimeMinutes += (msg.duration / 60);
+
+          console.log(`%c📊 Brainrot: ${oldScore} → ${stats.brainrotScore} (+${increment})`, "color: #f59e0b; font-weight: bold;");
+
+          // Save to storage FIRST
+          chrome.storage.local.set({ realtime_stats: stats }, () => {
+            try {
+              // Acknowledge receipt
+              sendResponse({ success: true });
+              console.log("✅ TSG BG: Response sent to content script");
+            } catch (respError) {
+              console.error("❌ TSG BG: Failed to send response:", respError.message);
+            }
+
+            // Notify UI AFTER storage is confirmed
+            chrome.runtime.sendMessage({ type: "UI_REFRESH" }).catch((err) => {
+              console.warn("ℹ️ TSG BG: UI not currently active for refresh", err?.message);
+            });
+
+            // Then attempt backend sync in the background
+            if (res.starknet_address) {
+              (async () => {
+                try {
+                  console.log("ℹ️ TSG BG: Syncing with backend...");
+                  const response = await fetch('http://localhost:3333/api/data/activity', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ durationSeconds: msg.duration, address: res.starknet_address })
+                  });
+                  if (!response.ok) {
+                    const errText = await response.text();
+                    throw new Error(`Server responded with ${response.status}: ${errText}`);
+                  }
+                  const data = await response.json();
+                  if (data.success) {
+                    console.log("✅ TSG BG: Backend sync successful");
+                    chrome.storage.local.set({
+                      realtime_stats: data.stats,
+                      sync_error: null
+                    }, () => {
+                      chrome.runtime.sendMessage({ type: "UI_REFRESH" }).catch(() => {});
+                    });
+                  } else {
+                    throw new Error(data.message || "Backend returned success=false");
+                  }
+                } catch (err) {
+                  console.error("❌ TSG BG: Backend sync failed:", err.message);
+                  chrome.storage.local.set({ sync_error: "Backend node offline. Stats may be delayed." });
+                }
+              })();
+            } else {
+              console.warn("⚠️ TSG BG: No starknet_address found. Backend sync skipped.");
+            }
+          });
+        } catch (storageError) {
+          console.error("❌ TSG BG: Error handling storage:", storageError.message);
+          sendResponse({ success: false, error: storageError.message });
+        }
+      });
+    } else {
+      console.log("ℹ️ TSG BG: Message type ignored:", msg.type);
+      sendResponse({ success: false, error: "Unknown message type" });
+    }
+    return true; // Indicate we'll send response asynchronously
+  } catch (listenerError) {
+    console.error("❌ TSG BG: Critical error in message listener:", listenerError.message, listenerError);
+    try {
+      sendResponse({ success: false, error: listenerError.message });
+    } catch (sendError) {
+      console.error("❌ TSG BG: Could not send error response:", sendError.message);
+    }
+    return false;
+  }
+});
+
 // Unified External Listener
 chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => {
   console.log("📥 External Message:", request.type);

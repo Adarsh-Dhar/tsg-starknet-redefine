@@ -1,1 +1,19 @@
 Server is live at http://localhost:3333
+[Transfer] STRK transfer request: from=0x0096d8b32e698b312acb1d3c493f80d7e7dcf98a1376d8691adeb2463346291f, to=0x0096d8b32e698b312acb1d3c493f80d7e7dcf98a1376d8691adeb2463346291f, amount=0.1
+[Transfer] Connecting to RPC: https://starknet-sepolia.g.alchemy.com/starknet/version/rpc/v0_10/ttO_pNTAABnXF_9T1g7sSRQfRN1wbcip
+[Transfer] Account: 0x4a05d15f240be02f13ef2e09349a668f2faa7942cbde11008b737111c9351f3
+[Transfer] Executing vault.transfer(0x0096d8b32e698b312acb1d3c493f80d7e7dcf98a1376d8691adeb2463346291f, 0x0096d8b32e698b312acb1d3c493f80d7e7dcf98a1376d8691adeb2463346291f, 0.1)
+[Transfer] About to invoke transfer on vault contract...
+[Transfer] Contract address: 0x032490c26a49c74f927669b9d5958aa7db74398d0e55b92a10d952c32e0c2630
+[Transfer] ⚠️  Vault transfer reverted: user has insufficient delegated balance
+[Transfer] User address: 0x0096d8b32e698b312acb1d3c493f80d7e7dcf98a1376d8691adeb2463346291f
+[Transfer] Requested amount: 0.1
+[Transfer] STRK transfer request: from=0x0096d8b32e698b312acb1d3c493f80d7e7dcf98a1376d8691adeb2463346291f, to=0x0096d8b32e698b312acb1d3c493f80d7e7dcf98a1376d8691adeb2463346291f, amount=0.1
+[Transfer] Connecting to RPC: https://starknet-sepolia.g.alchemy.com/starknet/version/rpc/v0_10/ttO_pNTAABnXF_9T1g7sSRQfRN1wbcip
+[Transfer] Account: 0x4a05d15f240be02f13ef2e09349a668f2faa7942cbde11008b737111c9351f3
+[Transfer] Executing vault.transfer(0x0096d8b32e698b312acb1d3c493f80d7e7dcf98a1376d8691adeb2463346291f, 0x0096d8b32e698b312acb1d3c493f80d7e7dcf98a1376d8691adeb2463346291f, 0.1)
+[Transfer] About to invoke transfer on vault contract...
+[Transfer] Contract address: 0x032490c26a49c74f927669b9d5958aa7db74398d0e55b92a10d952c32e0c2630
+[Transfer] ⚠️  Vault transfer reverted: user has insufficient delegated balance
+[Transfer] User address: 0x0096d8b32e698b312acb1d3c493f80d7e7dcf98a1376d8691adeb2463346291f
+[Transfer] Requested amount: 0.1

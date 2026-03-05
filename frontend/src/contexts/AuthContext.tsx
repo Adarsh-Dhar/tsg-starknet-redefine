@@ -50,12 +50,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Debug: Log state changes
   useEffect(() => {
-    console.log('[AuthContext] State changed:', {
-      hasToken: !!token,
-      hasUser: !!user,
-      isAuthenticated: !!token,
-      user: user ? { email: user.email, amountDelegated: user.amountDelegated } : null
-    });
+    // This space is intentionally left blank after removing console.logs
   }, [user, token]);
 
   // Fetch user info helper
@@ -150,7 +145,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(async (email: string, password: string) => {
     try {
-      console.log('[AuthContext] Login starting...');
       const response = await fetch(`${API_BASE_URL}/auth/login`, {
         method: 'POST',
         headers: {
@@ -168,22 +162,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const data = await response.json();
       const newToken = data.token;
       const newRefreshToken = data.refreshToken;
-      console.log('[AuthContext] Got token from server');
 
       // Save tokens
       await saveTokens(newToken, newRefreshToken, email);
-      console.log('[AuthContext] Tokens saved to storage');
       
       setToken(newToken);
-      console.log('[AuthContext] Token state updated');
 
       // Fetch user info
-      console.log('[AuthContext] Fetching user info...');
       const userInfo = await fetchUserInfoFn(newToken);
-      console.log('[AuthContext] User info fetched:', userInfo);
       
       setUser(userInfo);
-      console.log('[AuthContext] User state updated');
     } catch (error: any) {
       console.error('[AuthContext] Login error:', error);
       throw error;
@@ -192,7 +180,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signup = useCallback(async (email: string, password: string) => {
     try {
-      console.log('[AuthContext] Signup starting...');
       const response = await fetch(`${API_BASE_URL}/auth/signup`, {
         method: 'POST',
         headers: {
@@ -210,22 +197,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const data = await response.json();
       const newToken = data.token;
       const newRefreshToken = data.refreshToken;
-      console.log('[AuthContext] Got token from server');
 
       // Save tokens
       await saveTokens(newToken, newRefreshToken, email);
-      console.log('[AuthContext] Tokens saved to storage');
       
       setToken(newToken);
-      console.log('[AuthContext] Token state updated');
 
       // Fetch user info
-      console.log('[AuthContext] Fetching user info...');
       const userInfo = await fetchUserInfoFn(newToken);
-      console.log('[AuthContext] User info fetched:', userInfo);
       
       setUser(userInfo);
-      console.log('[AuthContext] User state updated');
     } catch (error: any) {
       console.error('[AuthContext] Signup error:', error);
       throw error;

@@ -43,7 +43,6 @@ function AddressSyncModal({ address, email, onConfirm, onCancel }: { address: st
       }
 
       const data = await response.json();
-      console.log('Address sync response:', data);
       onConfirm();
     } catch (error) {
       console.error('Error syncing address:', error);
@@ -124,12 +123,10 @@ function App() {
   useEffect(() => {
     const envRpc = import.meta.env.VITE_STARKNET_RPC;
     if (provider && provider.provider) {
-      console.log("[DEBUG] Starknet provider endpoint (from .env):", envRpc);
     } else {
       console.warn("[WARN] Starknet provider is not set up correctly.", provider);
     }
   }, [provider]);
-  console.log("useAccount() output:", accountInfo);
   const { connect, connectors } = useConnect();
   const { disconnect } = useDisconnect();
   
@@ -146,13 +143,11 @@ function App() {
     const emailParam = params.get('email');
     if (emailParam) {
       setUserEmail(decodeURIComponent(emailParam));
-      console.log('Email extracted from URL:', decodeURIComponent(emailParam));
     }
   }, []);
 
   // Wait for account to be initialized before allowing contract calls
   const refreshBalance = async () => {
-    console.log("refreshBalance called");
     // Only use account if defined, otherwise use provider.provider (starknet.js Provider)
     if (!provider || !provider.provider) {
       alert("Starknet provider is not set up. Please check your network or RPC configuration.");
@@ -161,11 +156,9 @@ function App() {
     const providerOrAccount = account ? account : provider.provider;
     if (!address) {
       console.error("[ERROR] No address found, aborting balance refresh.");
-      console.log("Full useAccount() output:", accountInfo);
       return;
     }
     try {
-        console.log("Instantiating Contract with:", {
           abi: GRAVITY_VAULT_ABI,
           address: VAULT_ADDRESS,
           providerOrAccount
@@ -176,18 +169,11 @@ function App() {
           address: VAULT_ADDRESS,
           providerOrAccount
         });
-      console.log("Contract instance created:", vault);
-      console.log("Calling get_balance with address:", address);
       const resAddr = await vault.get_balance(address);
-      console.log("get_balance result:", resAddr);
       if (resAddr) {
-        console.log("Parsing u256 result:", resAddr);
         const amountBigInt = uint256.uint256ToBN(resAddr);
-        console.log("Converted to BigInt:", amountBigInt);
         const addrBal = (Number(amountBigInt) / 10 ** 18).toFixed(4);
-        console.log("Formatted balance for STRK:", addrBal);
         setDelegatedBal(addrBal);
-        console.log(`Balance sync successful: ${addrBal} STRK`);
         
         // PUSH TO DB: This is the ONLY way the extension will get the amount
         try {
@@ -200,7 +186,6 @@ function App() {
           // If email is in URL, include it for email-address linking
           if (userEmail) {
             syncData.email = userEmail;
-            console.log("Portal: Including email for wallet linking:", userEmail);
           }
           
           await fetch('http://localhost:3333/api/delegate', {
@@ -208,7 +193,6 @@ function App() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(syncData)
           });
-          console.log("Portal: Pushed delegation data to backend database");
           
           // If email was provided, also explicitly link the wallet
           if (userEmail) {
@@ -221,7 +205,6 @@ function App() {
                   starknetAddr: address
                 })
               });
-              console.log("Portal: Linked wallet to email:", userEmail);
             } catch (linkError) {
               console.warn("Portal: Failed to link wallet to email:", linkError);
             }
@@ -235,11 +218,9 @@ function App() {
             starknet_address: address,
             delegated_amount: Number(addrBal)
           }, () => {
-            console.log("Portal: Synced delegation data to storage");
           });
         }
       } else {
-        console.log("No result returned from get_balance.");
       }
     } catch (err) {
       console.error("Contract call failed. Ensure VAULT_ADDRESS is correct:", err);
@@ -248,14 +229,12 @@ function App() {
 
   useEffect(() => {
     if (isConnected && address) {
-      console.log("useEffect triggered", isConnected, address);
       // Show address confirmation dialog if not already confirmed
       if (!addressConfirmed) {
         setShowAddressConfirmation(true);
       } else {
         refreshBalance();
         const interval = setInterval(() => {
-          console.log("Interval: calling refreshBalance");
           refreshBalance();
         }, 10000);
         return () => clearInterval(interval);
@@ -267,7 +246,6 @@ function App() {
       // Clear storage on disconnect
       if (typeof chrome !== 'undefined' && chrome.storage) {
         chrome.storage.local.remove(['starknet_address', 'delegated_amount'], () => {
-          console.log("Portal: Cleared storage on disconnect");
         });
       }
     }
@@ -331,7 +309,6 @@ function App() {
             alert('Warning: Transaction succeeded on-chain but backend sync failed. Please refresh.');
           } else {
             const syncData = await syncResponse.json();
-            console.log('Backend sync successful:', syncData);
             
             // Update chrome storage with confirmed database state
             if (typeof chrome !== 'undefined' && chrome.storage) {
@@ -339,7 +316,6 @@ function App() {
                 starknet_address: address,
                 delegated_amount: syncData.delegation.amountDelegated
               }, () => {
-                console.log('Portal: Updated storage with backend-confirmed delegation');
               });
             }
           }
@@ -464,7 +440,6 @@ function App() {
             // Start balance refresh after confirmation
             refreshBalance();
             const interval = setInterval(() => {
-              console.log("Interval: calling refreshBalance after address confirmation");
               refreshBalance();
             }, 10000);
             return () => clearInterval(interval);

@@ -5,6 +5,10 @@ import vaultRouter from './routes/vault/route.js';
 import dataRouter, { dataRateLimiter } from './routes/data/route.js';
 import delegateRouter from './routes/delegate/route.js';
 import transferRouter from './routes/transfer/route.js';
+import depositRouter from './routes/deposit/route.js';
+import executeDepositRouter from './routes/execute-deposit/route.js';
+import executePendingDepositsRouter from './routes/execute-pending-deposits/route.js';
+import scoreTransferRouter from './routes/score-transfer/route.js';
 import authRouter from './routes/auth.js';
 
 const app = express();
@@ -25,6 +29,10 @@ app.use('/api/vault', vaultRouter); // /api/vault/*
 app.use('/api/data', dataRateLimiter, dataRouter); // /api/data/*
 app.use('/api/delegate', delegateRouter); // /api/delegate/*
 app.use('/api/transfer', transferRouter); // /api/transfer/*
+app.use('/api/deposit', depositRouter); // /api/deposit/*
+app.use('/api/execute-deposit', executeDepositRouter); // /api/execute-deposit/*
+app.use('/api/execute-pending-deposits', executePendingDepositsRouter); // /api/execute-pending-deposits/*
+app.use('/api/score-transfer', scoreTransferRouter); // /api/score-transfer/*
 app.use('/api/auth', authRouter); // /api/auth/*
 
 app.listen(PORT, () => {

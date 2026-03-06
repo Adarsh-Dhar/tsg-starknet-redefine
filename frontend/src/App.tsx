@@ -192,6 +192,7 @@ function AppContent() {
                       syncAddress={syncAddress ?? user.starknetAddr}
                       delegatedAmount={delegatedAmount}
                       hasDelegated={delegatedAmount >= 1}
+                      userEmail={user.email}
                     />
                   ) : (
                     <DelegationGate userEmail={user.email} />

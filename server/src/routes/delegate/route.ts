@@ -2,8 +2,12 @@ import { Router, Request, Response } from 'express';
 import prisma from '../../lib/prisma.js';
 import { verifyDelegationTransaction } from '../../lib/transactionVerify.js';
 import { z } from 'zod';
+import historyRouter from './history.js';
 
 const router = Router();
+
+// Mount history sub-router
+router.use(historyRouter);
 
 // Zod schemas for validation
 const DelegateRequestSchema = z.object({

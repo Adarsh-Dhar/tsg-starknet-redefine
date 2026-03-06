@@ -5,7 +5,7 @@ import { useAccount, useConnect, useDisconnect } from "@starknet-react/core";
 import { uint256, Contract, Abi } from 'starknet';
 import { useAuth } from './contexts/AuthContext';
 
-const VAULT_ADDRESS = "0x0602c5436e8dc621d2003f478d141a76b27571d29064fbb9786ad21032eb4769";
+const VAULT_ADDRESS = "0x032490c26a49c74f927669b9d5958aa7db74398d0e55b92a10d952c32e0c2630"; // Correct vault address on Sepolia
 const STRK_TOKEN_ADDRESS = "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
 const EXTENSION_ID = "khehdcnoacelhjahplhodneiomdlbmed";
 const API_BASE_URL = 'http://localhost:3333/api'; 
@@ -180,15 +180,20 @@ export default function WalletPage({ minimal = false }: WalletPageProps) {
         }
       ]);
 
-      // Store tx hash temporarily
-      if (txResponse && typeof txResponse === 'string') {
-        setDelegationTxHash(txResponse);
+      // Extract transaction hash from response
+      const txHash = txResponse.transaction_hash || (typeof txResponse === 'string' ? txResponse : null);
+      
+      if (txHash) {
+        setDelegationTxHash(txHash);
         
         // Notify backend of delegation
-        notifyDelegation(user.starknetAddr || address as any as null, parseFloat(amount), txResponse);
+        notifyDelegation(user.starknetAddr || address as any as null, parseFloat(amount), txHash);
+        
+        alert(`✅ Deposit transaction submitted!\nTX: ${txHash}\nCheck Voyager for status.`);
+      } else {
+        alert("✅ Transaction submitted but couldn't get TX hash.");
       }
-
-      alert("✅ Delegation transaction submitted! Check the portal for status.");
+      
       setAmount('');
     } catch (e) {
       console.error("Delegate error:", e);

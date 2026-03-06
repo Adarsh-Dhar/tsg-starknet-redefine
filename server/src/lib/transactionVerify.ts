@@ -1,6 +1,6 @@
 import { Provider, RpcProvider } from 'starknet';
 
-const RPC_URL = process.env.STARKNET_RPC_URL || 'https://starknet-sepolia.g.alchemy.com/starknet/version/rpc/v0_10/ttO_pNTAABnXF_9T1g7sSRQfRN1wbcip';
+const RPC_URL = process.env.STARKNET_RPC_URL || 'https://starknet-sepolia.public.blastapi.io';
 const VAULT_ADDRESS = process.env.VAULT_ADDRESS || '0x0602c5436e8dc621d2003f478d141a76b27571d29064fbb9786ad21032eb4769';
 
 export const provider = new RpcProvider({ nodeUrl: RPC_URL });

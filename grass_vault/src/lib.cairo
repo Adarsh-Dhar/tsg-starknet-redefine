@@ -2,6 +2,7 @@
 pub trait IGravityVault<TContractState> {
     fn deposit(ref self: TContractState, amount: u256);
     fn slash(ref self: TContractState, user: starknet::ContractAddress, amount: u256);
+    fn unslash(ref self: TContractState, user: starknet::ContractAddress, amount: u256);
     fn transfer(ref self: TContractState, user: starknet::ContractAddress, recipient: starknet::ContractAddress, amount: u256);
     fn reclaim(ref self: TContractState, amount: u256);
     fn get_balance(self: @TContractState, account: starknet::ContractAddress) -> u256;
@@ -62,6 +63,15 @@ mod GravityVault {
             // Transfer slashed tokens to the delegate
             let token = IERC20Dispatcher { contract_address: self.token_address.read() };
             token.transfer(self.delegate.read(), amount);
+        }
+
+        fn unslash(ref self: ContractState, user: ContractAddress, amount: u256) {
+            // Only the authorized delegate (the server) can unslash (refund)
+            assert(get_caller_address() == self.delegate.read(), 'NOT_AUTHORIZED_DELEGATE');
+            
+            // Credit back to user's vault balance (reverse of slash)
+            let user_bal = self.balances.read(user);
+            self.balances.write(user, user_bal + amount);
         }
 
         fn transfer(ref self: ContractState, user: ContractAddress, recipient: ContractAddress, amount: u256) {

@@ -1,93 +1,153 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAccount, useBalance } from "@starknet-react/core";
 import WalletPage from '../WalletPage';
-import { Zap, Flame, Brain, TrendingUp, Lock, RotateCcw } from 'lucide-react';
+import { Zap, Flame, Brain, TrendingUp, Lock, RotateCcw, History, ExternalLink, AlertCircle, CheckCircle } from 'lucide-react';
 import Progress from './ui/progress';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Contract, uint256, RpcProvider, type Abi } from 'starknet';
 import GravityVaultAbiJson from '../abi/GravityVault.json';
+import { executeDepositWithWallet, confirmDepositExecution } from '../lib/walletExecute';
+import { PendingDepositsCard } from './PendingDepositsCard';
 
 // Extract just the ABI from the compiled contract JSON
 const GRAVITY_VAULT_ABI = (GravityVaultAbiJson as any).abi as Abi;
 const STRK_TOKEN_ADDRESS = "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
-const VAULT_ADDRESS = "0x0602c5436e8dc621d2003f478d141a76b27571d29064fbb9786ad21032eb4769";
-const RPC_URL = "https://starknet-sepolia.public.blastapi.io";
+const DEFAULT_VAULT_ADDRESS = "0x032490c26a49c74f927669b9d5958aa7db74398d0e55b92a10d952c32e0c2630";
+const VAULT_ADDRESS = (import.meta.env.VITE_VAULT_ADDRESS || DEFAULT_VAULT_ADDRESS).trim();
+const RPC_URL = (import.meta.env.VITE_STARKNET_RPC || "https://starknet-sepolia.public.blastapi.io").trim();
+
+interface Transaction {
+  txHash: string;
+  amount: number;
+  timestamp: string;
+  type: string;
+  status: string;
+}
+
+interface ScoreTransferResult {
+  success: boolean;
+  txHash?: string;
+  error?: string;
+  message?: string;
+}
 
 interface DashboardProps {
   brainrotScore: number;
   syncAddress: string | null;
-  delegatedAmount?: number;
+  delegatedAmount?: number; // User's delegation allowance in wallet
   hasDelegated?: boolean;
+  userEmail?: string;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ brainrotScore, syncAddress, delegatedAmount = 0, hasDelegated }) => {
+const Dashboard: React.FC<DashboardProps> = ({ brainrotScore, syncAddress, delegatedAmount = 0, hasDelegated, userEmail }) => {
   const { isConnected, address } = useAccount();
   const [displayScore, setDisplayScore] = useState<number>(brainrotScore);
-  const [contractDelegatedAmount, setContractDelegatedAmount] = useState<number>(delegatedAmount);
+  const [vaultBalance, setVaultBalance] = useState<number>(0); // Current vault balance (what's been deposited)
+  const [allowanceRemaining, setAllowanceRemaining] = useState<number>(delegatedAmount); // User's remaining allowance
+  const [totalDelegatedFromDB, setTotalDelegatedFromDB] = useState<number>(0); // Total ever delegated (from DB)
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [isLoadingBalance, setIsLoadingBalance] = useState(false);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [scoreTransferError, setScoreTransferError] = useState<string | null>(null);
+  const [scoreTransferPending, setScoreTransferPending] = useState<boolean>(false);
+  const [lastScoreTransferTx, setLastScoreTransferTx] = useState<string | null>(null);
   const initialDelegatedAmountRef = useRef<number>(delegatedAmount);
-  const lastPersistedAmountRef = useRef<number>(delegatedAmount);
+  const lastPersistedAmountRef = useRef<number>(delegatedAmount); // Track remaining allowance
   const previousScoreBucketRef = useRef<number>(Math.floor(brainrotScore / 100));
+  const processedBucketsRef = useRef<Set<number>>(new Set()); // Track which buckets we've processed for score transfers
 
-  // Fetch actual delegated amount from smart contract
+  // Fetch actual vault balance from smart contract
   useEffect(() => {
-    const fetchContractBalance = async () => {
+    const fetchVaultBalance = async () => {
       if (!syncAddress) {
-        return;
-      }
-
-      // Check if we're in a Chrome extension context
-      const isExtension = typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id;
-      
-      if (isExtension) {
-        // In extension, only initialize once from the FIRST delegatedAmount prop received
-        // Use ref to prevent re-initialization when prop updates from backend
-        if (contractDelegatedAmount === delegatedAmount && initialDelegatedAmountRef.current === delegatedAmount) {
-          // First initialization - store the initial amount
-          setContractDelegatedAmount(delegatedAmount);
-        }
-        // If contractDelegatedAmount differs from current delegatedAmount prop, don't reset it
-        // This allows tokenomics to control the value
         return;
       }
 
       setIsLoadingBalance(true);
       try {
-        // Create standalone RPC provider (works in web app context)
         const rpcProvider = new RpcProvider({ nodeUrl: RPC_URL });
         
-         const vault = new Contract({
-          abi: GRAVITY_VAULT_ABI,
-          address: VAULT_ADDRESS,
-          providerOrAccount: rpcProvider
-        });
-
-        const result = await vault.get_balance(syncAddress);
+        console.log('[Dashboard] Fetching vault balance for:', syncAddress);
+        console.log('[Dashboard] Vault address:', VAULT_ADDRESS);
         
+        // Create contract instance from ABI
+        const contract = new Contract({ abi: GRAVITY_VAULT_ABI, address: VAULT_ADDRESS, providerOrAccount: rpcProvider });
+        
+        // Call get_balance function
+        const result = await (contract as any).get_balance(syncAddress);
+        
+        console.log('[Dashboard] RPC response:', result);
+
+        // Parse u256 response - handle multiple formats
+        let balance = 0;
         if (result) {
-          const amountBigInt = uint256.uint256ToBN(result);
-          const amount = Number(amountBigInt) / 10 ** 18;
-          setContractDelegatedAmount(amount);
+          let amountBigInt: bigint;
+          
+          // Check if result is already a BigInt
+          if (typeof result === 'bigint') {
+            amountBigInt = result;
+          } else if (result.low !== undefined && result.high !== undefined) {
+            // u256 with low/high components
+            const low = BigInt(result.low ?? '0');
+            const high = BigInt(result.high ?? '0');
+            amountBigInt = low + (high << 128n);
+          } else if (Array.isArray(result)) {
+            // Array format [low, high]
+            const low = BigInt(result[0] ?? '0');
+            const high = BigInt(result[1] ?? '0');
+            amountBigInt = low + (high << 128n);
+          } else {
+            amountBigInt = BigInt('0');
+          }
+          
+          balance = Number(amountBigInt) / 10 ** 18;
+          console.log('[Dashboard] Parsed vault balance:', balance);
         }
+        setVaultBalance(balance);
       } catch (error) {
-        console.error('[Dashboard] Failed to fetch contract balance (using database value):', error);
-        // Fallback to database value on error
-        setContractDelegatedAmount(delegatedAmount);
+        console.error('[Dashboard] Failed to fetch vault balance:', error);
+        setVaultBalance(0);
       } finally {
         setIsLoadingBalance(false);
       }
     };
 
-    fetchContractBalance();
-    // Refresh every 10 seconds (only in web app context)
-    const interval = setInterval(fetchContractBalance, 10000);
+    fetchVaultBalance();
+    // Refresh every 10 seconds
+    const interval = setInterval(fetchVaultBalance, 10000);
     return () => clearInterval(interval);
-  }, [syncAddress, delegatedAmount]);
+  }, [syncAddress]);
+
+  // Fetch transaction history from backend
+  useEffect(() => {
+    const fetchHistory = async () => {
+      if (!syncAddress) return;
+
+      setIsLoadingHistory(true);
+      try {
+        const response = await fetch(`http://localhost:3333/api/delegate/history/${syncAddress}?limit=10`);
+        if (response.ok) {
+          const data = await response.json();
+          setTotalDelegatedFromDB(data.totalDelegated || 0);
+          setTransactions(data.transactions || []);
+        }
+      } catch (error) {
+        console.error('[Dashboard] Failed to fetch transaction history:', error);
+      } finally {
+        setIsLoadingHistory(false);
+      }
+    };
+
+    fetchHistory();
+    // Refresh every 15 seconds
+    const interval = setInterval(fetchHistory, 15000);
+    return () => clearInterval(interval);
+  }, [syncAddress]);
 
   // Log current state
   useEffect(() => {
     // This space is intentionally left blank after removing console.logs
-  }, [syncAddress, delegatedAmount, contractDelegatedAmount, hasDelegated]);
+  }, [syncAddress, delegatedAmount, vaultBalance, allowanceRemaining, hasDelegated]);
 
   useEffect(() => {
     if (displayScore !== brainrotScore) {
@@ -103,8 +163,8 @@ const Dashboard: React.FC<DashboardProps> = ({ brainrotScore, syncAddress, deleg
   }, [brainrotScore, displayScore]);
 
   // Tokenomics rule:
-  // - every +100 score: subtract (current delegated / 100)
-  // - every -100 score: add (current delegated / 100)
+  // - every +100 score: deduct 0.01 STRK from vault using slash()
+  // - every -100 score: refund 0.01 STRK to user using transfer()
   useEffect(() => {
     const currentBucket = Math.floor(brainrotScore / 100);
     const previousBucket = previousScoreBucketRef.current;
@@ -114,98 +174,74 @@ const Dashboard: React.FC<DashboardProps> = ({ brainrotScore, syncAddress, deleg
     }
 
     const bucketDelta = currentBucket - previousBucket;
-    const movedBuckets = Math.abs(bucketDelta);
+    const scoreChange = Math.abs(bucketDelta) * 100;
 
-    setContractDelegatedAmount((currentAmount) => {
-      if (currentAmount <= 0) {
-        return 0;
-      }
-
-      const tokenPer100 = currentAmount / 100;
-      const totalTokenDelta = movedBuckets * tokenPer100 * (bucketDelta > 0 ? -1 : 1);
-      const nextAmount = Math.max(0, currentAmount + totalTokenDelta);
-
-      return nextAmount;
-    });
+    console.log(`[Dashboard] Score bucket change detected: ${previousBucket} → ${currentBucket} (delta: ${bucketDelta}, change: ${scoreChange})`);
 
     previousScoreBucketRef.current = currentBucket;
-  }, [brainrotScore]);
 
-  // Execute real STRK transfer when delegated amount decreases (score bucket crossed)
-  useEffect(() => {
-    if (!syncAddress) return;
-    
-    // Only proceed if the amount actually changed
-    const amountChanged = Math.abs(contractDelegatedAmount - lastPersistedAmountRef.current) > 0.0001;
-    if (!amountChanged) return;
+    // Use syncAddress for extension context, fall back to address for web
+    const userAddressToUse = syncAddress || address;
 
-    // Calculate transfer amount (how much STRK is being removed from delegation)
-    const transferAmount = lastPersistedAmountRef.current - contractDelegatedAmount;
-    
-    // Only execute transfer if amount decreased (delegation reduced)
-    if (transferAmount <= 0.0001) return;
+    // Only process if address is available
+    if (!userAddressToUse) {
+      console.log('[Dashboard] Score bucket changed but no address available yet');
+      return;
+    }
 
-    const executeTransfer = async () => {
+    // Determine if this is a deduction (score increased) or refund (score decreased)
+    // bucketDelta > 0 means score increased, < 0 means score decreased
+    const isScoreIncrease = bucketDelta > 0;
+    const isScoreDecrease = bucketDelta < 0;
+
+    console.log(`[Dashboard] isScoreIncrease: ${isScoreIncrease}, isScoreDecrease: ${isScoreDecrease}, bucketDelta: ${bucketDelta}`);
+
+    const processScoreTransfer = async () => {
+      setScoreTransferPending(true);
+      setScoreTransferError(null);
+
       try {
-        console.log(`[Dashboard] Executing STRK transfer: ${transferAmount.toFixed(6)} STRK from ${syncAddress}`);
-        
-        // Call backend to execute the STRK transfer
-        const response = await fetch('http://localhost:3333/api/transfer/strk', {
+        const endpoint = isScoreIncrease ? '/api/score-transfer/deduct' : '/api/score-transfer/refund';
+        const payload = isScoreIncrease 
+          ? { userAddress: userAddressToUse, scoreIncrease: scoreChange }
+          : { userAddress: userAddressToUse, scoreDecrease: scoreChange };
+
+        console.log(`[Dashboard] Processing ${isScoreIncrease ? 'deduction' : 'refund'} for score change of ${scoreChange}. Endpoint: ${endpoint}`, payload);
+
+        const response = await fetch(`http://localhost:3333${endpoint}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            fromAddress: syncAddress,
-            toAddress: syncAddress, // Transfer to self (or treasury if configured)
-            amount: Number(transferAmount.toFixed(6))
-          })
+          body: JSON.stringify(payload),
         });
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error('[Dashboard] Failed to execute STRK transfer:', response.status, errorText);
-          return;
-        }
 
         const data = await response.json();
-        const realTxHash = data.transactionHash;
 
-        console.log(`[Dashboard] STRK transfer successful. TX Hash: ${realTxHash}`);
-
-        // Now persist the delegation with the real transaction hash
-        const persistResponse = await fetch('http://localhost:3333/api/delegate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            address: syncAddress,
-            amount: Number(contractDelegatedAmount.toFixed(6)),
-            txHash: realTxHash
-          })
-        });
-
-        if (!persistResponse.ok) {
-          console.error('[Dashboard] Failed to persist delegation with tx hash:', persistResponse.status);
+        if (!response.ok || !data.success) {
+          const errorMsg = data.message || data.error || 'Unknown error';
+          setScoreTransferError(errorMsg);
+          console.error(`[Dashboard] Score transfer failed:`, errorMsg);
           return;
         }
 
-        // Update ref to track this as persisted
-        lastPersistedAmountRef.current = contractDelegatedAmount;
+        setLastScoreTransferTx(data.txHash);
+        console.log(`[Dashboard] ✅ Score ${isScoreIncrease ? 'deduction' : 'refund'} successful! TX: ${data.txHash}`);
 
-        if (typeof chrome !== 'undefined' && chrome.storage) {
-          chrome.storage.local.set({ delegated_amount: contractDelegatedAmount });
-        }
-
-        console.log(`[Dashboard] Delegation updated: ${contractDelegatedAmount.toFixed(6)} STRK with TX: ${realTxHash}`);
-
-      } catch (error) {
-        console.error('[Dashboard] Error executing STRK transfer:', error);
+      } catch (error: any) {
+        const errorMsg = error.message || 'Network or server error';
+        setScoreTransferError(errorMsg);
+        console.error('[Dashboard] Score transfer error:', error);
+      } finally {
+        setScoreTransferPending(false);
       }
     };
 
-    executeTransfer();
-  }, [contractDelegatedAmount, syncAddress]);
+    processScoreTransfer();
+  }, [brainrotScore, address, syncAddress]);
 
-  // AUTHORIZATION GATE: Must have address AND >= 1 STRK (from contract)
-  const isAuthorized = !!syncAddress && contractDelegatedAmount >= 1;
+
+
+  // AUTHORIZATION GATE: Must have address AND >= 1 STRK allowance remaining
+  const isAuthorized = !!syncAddress && allowanceRemaining >= 1;
 
   if (!isAuthorized) {
     return (
@@ -220,9 +256,9 @@ const Dashboard: React.FC<DashboardProps> = ({ brainrotScore, syncAddress, deleg
           </p>
         </div>
         <div className="p-4 rounded-xl bg-slate-900 border border-emerald-500/10 w-full shadow-inner">
-          <p className="text-[9px] text-emerald-500/40 uppercase font-black mb-1 tracking-widest">Current Stake</p>
+          <p className="text-[9px] text-emerald-500/40 uppercase font-black mb-1 tracking-widest">Current Allowance</p>
           <p className="text-lg font-mono font-bold text-white">
-            {isLoadingBalance ? '...' : contractDelegatedAmount.toFixed(2)} / 1.00 STRK
+            {isLoadingBalance ? '...' : allowanceRemaining.toFixed(2)} / 1.00 STRK
           </p>
         </div>
         <a 
@@ -262,35 +298,211 @@ const Dashboard: React.FC<DashboardProps> = ({ brainrotScore, syncAddress, deleg
 
   // Responsive grid: 1 column for popup, 2 columns for webapp
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in duration-500">
-      {/* Neural Load Card */}
-      <div className="flex flex-col items-center text-center space-y-1 py-4 bg-slate-900/40 rounded-2xl border border-emerald-500/10">
-        <h2 className="text-[10px] font-mono uppercase tracking-[0.3em] text-emerald-500/50">Neural Load</h2>
-        <div className={`text-7xl font-black tracking-tighter tabular-nums ${status.color}`}>{displayScore.toLocaleString()}</div>
-        <div className={`flex items-center gap-2 text-xs font-bold uppercase ${status.color}`}>{status.icon} {status.label}</div>
-        <button
-          onClick={handleResetScore}
-          className="mt-3 px-3 py-1 text-[9px] font-bold uppercase rounded-lg bg-slate-800 hover:bg-slate-700 transition-colors flex items-center gap-1 text-slate-400 hover:text-slate-200"
-          title="Reset score to 0"
-        >
-          <RotateCcw size={12} />
-          Reset
-        </button>
+    <div className="space-y-6 animate-in fade-in duration-500">
+      {/* Top Row - Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Neural Load Card */}
+        <div className="flex flex-col items-center text-center space-y-1 py-4 bg-slate-900/40 rounded-2xl border border-emerald-500/10">
+          <h2 className="text-[10px] font-mono uppercase tracking-[0.3em] text-emerald-500/50">Neural Load</h2>
+          <div className={`text-7xl font-black tracking-tighter tabular-nums ${status.color}`}>{displayScore.toLocaleString()}</div>
+          <div className={`flex items-center gap-2 text-xs font-bold uppercase ${status.color}`}>{status.icon} {status.label}</div>
+          <button
+            onClick={handleResetScore}
+            className="mt-3 px-3 py-1 text-[9px] font-bold uppercase rounded-lg bg-slate-800 hover:bg-slate-700 transition-colors flex items-center gap-1 text-slate-400 hover:text-slate-200"
+            title="Reset score to 0"
+          >
+            <RotateCcw size={12} />
+            Reset
+          </button>
+        </div>
+        {/* Stats/Progress Card */}
+        <Card className="border-emerald-500/20 bg-slate-900/40 backdrop-blur-md">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-[10px] font-mono text-slate-400 flex justify-between">
+              <span>Progress</span>
+              <span className="text-emerald-500">{Math.round(percentage)}%</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Progress value={percentage} className="h-2 bg-slate-950 border border-emerald-500/10" />
+            <div className="flex justify-between text-[9px] font-mono text-slate-500">
+              <span className="flex items-center gap-1"><TrendingUp size={10} className="text-red-500"/> +8 pts/sec</span>
+              <span>-200 pts/min decay</span>
+            </div>
+          </CardContent>
+        </Card>
       </div>
-      {/* Stats/Progress Card */}
+
+      {/* Middle Row - Delegation Info */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Current Vault Balance */}
+        <Card className="border-emerald-500/20 bg-slate-900/40 backdrop-blur-md">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-[10px] font-mono text-slate-400 uppercase tracking-widest">
+              Vault Balance
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-black text-emerald-400 tabular-nums">
+              {isLoadingBalance ? '...' : vaultBalance.toFixed(4)} STRK
+            </div>
+            <p className="text-[9px] text-slate-500 mt-1 font-mono">Deposited to vault</p>
+          </CardContent>
+        </Card>
+
+        {/* Remaining Allowance */}
+        <Card className="border-emerald-500/20 bg-slate-900/40 backdrop-blur-md">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-[10px] font-mono text-slate-400 uppercase tracking-widest">
+              Allowance Remaining
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-black text-blue-400 tabular-nums">
+              {allowanceRemaining.toFixed(4)} STRK
+            </div>
+            <p className="text-[9px] text-slate-500 mt-1 font-mono">Can still deposit</p>
+            <a
+              href={`http://localhost:5174?email=${encodeURIComponent(userEmail || '')}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex mt-3 px-3 py-1.5 text-[10px] font-bold uppercase rounded-lg bg-emerald-500 text-slate-950 hover:bg-emerald-400 transition-colors"
+            >
+              Delegate More
+            </a>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Pending Deposits Alert */}
+      {address && <PendingDepositsCard userAddress={address} />}
+
+      {/* Score Transfer Status Alert */}
+      {scoreTransferPending && (
+        <Card className="border-yellow-500/30 bg-yellow-500/5 backdrop-blur-md">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-[10px] font-mono text-yellow-400 uppercase tracking-widest flex items-center gap-2">
+              <span className="animate-spin">⚡</span>
+              Processing Score Transfer
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-[9px] text-yellow-300 font-mono">Executing 0.01 STRK transaction...</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {scoreTransferError && (
+        <Card className="border-red-500/30 bg-red-500/5 backdrop-blur-md">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-[10px] font-mono text-red-400 uppercase tracking-widest flex items-center gap-2">
+              <AlertCircle size={12} />
+              Transfer Failed
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-[9px] text-red-300 font-mono break-words">{scoreTransferError}</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {lastScoreTransferTx && !scoreTransferPending && !scoreTransferError && (
+        <Card className="border-emerald-500/30 bg-emerald-500/5 backdrop-blur-md">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-[10px] font-mono text-emerald-400 uppercase tracking-widest flex items-center gap-2">
+              <CheckCircle size={12} />
+              Latest Transfer
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between">
+              <span className="text-[9px] text-emerald-300 font-mono break-words">
+                {lastScoreTransferTx.slice(0, 12)}...{lastScoreTransferTx.slice(-8)}
+              </span>
+              <a
+                href={`https://sepolia.voyager.online/tx/${lastScoreTransferTx}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-emerald-400 hover:text-emerald-300 transition-colors"
+                title="View on Voyager"
+              >
+                <ExternalLink size={12} />
+              </a>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Bottom Row - Transaction History */}
       <Card className="border-emerald-500/20 bg-slate-900/40 backdrop-blur-md">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-[10px] font-mono text-slate-400 flex justify-between">
-            <span>Progress</span>
-            <span className="text-emerald-500">{Math.round(percentage)}%</span>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-[10px] font-mono text-slate-400 uppercase tracking-widest flex items-center gap-2">
+            <History size={12} />
+            Recent Transactions
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <Progress value={percentage} className="h-2 bg-slate-950 border border-emerald-500/10" />
-          <div className="flex justify-between text-[9px] font-mono text-slate-500">
-            <span className="flex items-center gap-1"><TrendingUp size={10} className="text-red-500"/> +8 pts/sec</span>
-            <span>-200 pts/min decay</span>
-          </div>
+        <CardContent>
+          {isLoadingHistory ? (
+            <div className="text-center py-4 text-slate-500 text-xs">Loading...</div>
+          ) : transactions.length === 0 ? (
+            <div className="text-center py-4 text-slate-500 text-xs">No transactions yet</div>
+          ) : (
+            <div className="space-y-2">
+              {transactions.map((tx, idx) => {
+                const statusColor = 
+                  tx.status === 'success' ? 'text-emerald-400' :
+                  tx.status === 'pending' ? 'text-yellow-400' :
+                  tx.status === 'reverted' ? 'text-red-400' :
+                  'text-slate-400';
+                
+                const statusBg = 
+                  tx.status === 'success' ? 'bg-emerald-500/10' :
+                  tx.status === 'pending' ? 'bg-yellow-500/10' :
+                  tx.status === 'reverted' ? 'bg-red-500/10' :
+                  'bg-slate-500/10';
+
+                return (
+                  <div 
+                    key={idx}
+                    className="flex items-center justify-between p-3 bg-slate-950/50 rounded-lg border border-emerald-500/5 hover:border-emerald-500/20 transition-colors"
+                  >
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className={`text-xs font-bold uppercase ${statusColor}`}>{tx.type}</span>
+                        <span className={`text-[8px] font-bold uppercase px-1.5 py-0.5 rounded ${statusBg} ${statusColor}`}>
+                          {tx.status}
+                        </span>
+                        <span className="text-[9px] text-slate-500 font-mono">
+                          {new Date(tx.timestamp).toLocaleString()}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-[10px] font-mono text-slate-400">
+                          {tx.txHash.slice(0, 8)}...{tx.txHash.slice(-6)}
+                        </span>
+                        {tx.status === 'success' && (
+                          <a
+                            href={`https://sepolia.voyager.online/tx/${tx.txHash}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-emerald-500 hover:text-emerald-400 transition-colors"
+                            title="View on Voyager"
+                          >
+                            <ExternalLink size={10} />
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm font-bold text-white tabular-nums">
+                        {tx.amount.toFixed(4)} STRK
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

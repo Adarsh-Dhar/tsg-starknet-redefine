@@ -26,6 +26,16 @@ model Delegation {
   amountDelegated Float    @default(0.0)
   lastUpdated     DateTime @default(now()) @updatedAt
   lastTxHash      String?
-  userId          String?   @unique
-  user            User?     @relation(fields: [userId], references: [id])
+  userId          String?  @unique
+  user            User?    @relation(fields: [userId], references: [id])
+}
+
+model TransactionHistory {
+  id              String   @id @default(cuid())
+  txHash          String   @unique
+  address         String
+  amount          Float
+  type            String   // "deposit", "transfer", "slash", "reclaim"
+  status          String   // "pending", "success", "failed", "reverted"
+  timestamp       DateTime @default(now())
 }

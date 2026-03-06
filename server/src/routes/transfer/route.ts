@@ -3,8 +3,10 @@ import { RpcProvider, Account, Contract, uint256, Signer } from 'starknet';
 import { z } from 'zod';
 import fs from 'fs';
 import path from 'path';
+import prisma from '../../lib/prisma.js';
 
 const router = Router();
+const transactionHistory = (prisma as any).transactionHistory;
 
 // Starknet configuration
 const RPC_URL = 'https://starknet-sepolia.public.blastapi.io';
@@ -134,6 +136,22 @@ router.post('/strk', async (req: Request, res: Response) => {
       console.log(`[Transfer] To: ${toAddress}`);
       console.log(`[Transfer] Amount: ${amount} STRK`);
 
+      // Save transaction to history
+      try {
+        await transactionHistory.create({
+          data: {
+            txHash,
+            address: fromAddress,
+            amount,
+            type: 'transfer',
+            status: 'success',
+          },
+        });
+        console.log(`[Transfer] Transaction saved to history: ${txHash}`);
+      } catch (historyError) {
+        console.error('[Transfer] Failed to save transaction history:', historyError);
+      }
+
       // Return the real transaction hash from blockchain
       res.status(200).json({
         success: true,
@@ -175,6 +193,25 @@ router.post('/strk', async (req: Request, res: Response) => {
         console.log('[Transfer] User address:', fromAddress);
         console.log('[Transfer] Requested amount:', amount);
 
+        // Generate a unique identifier for the failed transaction
+        const failedTxHash = '0x' + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
+
+        // Save failed transaction to history
+        try {
+          await transactionHistory.create({
+            data: {
+              txHash: failedTxHash,
+              address: fromAddress,
+              amount,
+              type: 'transfer',
+              status: 'reverted',
+            },
+          });
+          console.log(`[Transfer] Failed transaction saved to history: ${failedTxHash}`);
+        } catch (historyError) {
+          console.error('[Transfer] Failed to save failed transaction history:', historyError);
+        }
+
         res.status(400).json({
           success: false,
           error: 'INSUFFICIENT_DELEGATED_BALANCE',
@@ -201,6 +238,22 @@ router.post('/strk', async (req: Request, res: Response) => {
         // Generate a transaction hash for the queued transfer
         const queuedTxHash = '0x' + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
         
+        // Save queued transaction to history
+        try {
+          await transactionHistory.create({
+            data: {
+              txHash: queuedTxHash,
+              address: fromAddress,
+              amount,
+              type: 'transfer',
+              status: 'pending',
+            },
+          });
+          console.log(`[Transfer] Queued transaction saved to history: ${queuedTxHash}`);
+        } catch (historyError) {
+          console.error('[Transfer] Failed to save queued transaction history:', historyError);
+        }
+
         res.status(202).json({
           success: true,
           transactionHash: queuedTxHash,

@@ -2,15 +2,40 @@
 import { useState, useEffect } from 'react';
 import { useAccount, useConnect, useDisconnect, useProvider } from "@starknet-react/core";
 import { Wallet, ArrowDownCircle, ArrowUpCircle, Loader2, CheckCircle, X } from 'lucide-react';
-// Use 'type' for Abi to satisfy verbatimModuleSyntax
-import { uint256, Contract, type Abi } from 'starknet';
-import GravityVaultAbi from './abi/GravityVault.json';
+import { uint256, CallData, RpcProvider } from 'starknet';
 
-// Since the JSON is a direct array, cast the import itself
-const GRAVITY_VAULT_ABI = GravityVaultAbi as unknown as Abi;
-
-const VAULT_ADDRESS = "0x0602c5436e8dc621d2003f478d141a76b27571d29064fbb9786ad21032eb4769";
+const DEFAULT_VAULT_ADDRESS = "0x032490c26a49c74f927669b9d5958aa7db74398d0e55b92a10d952c32e0c2630";
+const VAULT_ADDRESS = (import.meta.env.VITE_VAULT_ADDRESS || DEFAULT_VAULT_ADDRESS).trim();
+const RPC_URL = (import.meta.env.VITE_STARKNET_RPC || '').trim();
 const STRK_TOKEN_ADDRESS = "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
+
+const parseU256ToBigInt = (value: any): bigint => {
+  if (!value) return 0n;
+
+  if (Array.isArray(value)) {
+    const low = BigInt(value[0] ?? '0');
+    const high = BigInt(value[1] ?? '0');
+    return low + (high << 128n);
+  }
+
+  if (value.balance) {
+    const low = BigInt(value.balance.low ?? value.balance[0] ?? '0');
+    const high = BigInt(value.balance.high ?? value.balance[1] ?? '0');
+    return low + (high << 128n);
+  }
+
+  if (typeof value.low !== 'undefined' || typeof value.high !== 'undefined') {
+    const low = BigInt(value.low ?? '0');
+    const high = BigInt(value.high ?? '0');
+    return low + (high << 128n);
+  }
+
+  if (value.result) {
+    return parseU256ToBigInt(value.result);
+  }
+
+  return 0n;
+};
 
 // Address Sync Confirmation Modal Component
 function AddressSyncModal({ address, email, onConfirm, onCancel }: { address: string; email: string | null; onConfirm: () => void; onCancel: () => void }) {
@@ -42,7 +67,7 @@ function AddressSyncModal({ address, email, onConfirm, onCancel }: { address: st
         return;
       }
 
-      const data = await response.json();
+      await response.json();
       onConfirm();
     } catch (error) {
       console.error('Error syncing address:', error);
@@ -119,9 +144,9 @@ function App() {
   const accountInfo = useAccount();
   const { address, account, isConnected } = accountInfo;
   const provider = useProvider();
+  const rpcProvider = new RpcProvider({ nodeUrl: RPC_URL });
   // Log provider details for debugging
   useEffect(() => {
-    const envRpc = import.meta.env.VITE_STARKNET_RPC;
     if (provider && provider.provider) {
     } else {
       console.warn("[WARN] Starknet provider is not set up correctly.", provider);
@@ -133,6 +158,7 @@ function App() {
   const [amount, setAmount] = useState('');
   const [loading, setLoading] = useState(false);
   const [delegatedBal, setDelegatedBal] = useState<string>("0.00");
+  const [walletBal, setWalletBal] = useState<string>("0.00");
   const [showAddressConfirmation, setShowAddressConfirmation] = useState(false);
   const [addressConfirmed, setAddressConfirmed] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
@@ -148,82 +174,71 @@ function App() {
 
   // Wait for account to be initialized before allowing contract calls
   const refreshBalance = async () => {
-    // Only use account if defined, otherwise use provider.provider (starknet.js Provider)
-    if (!provider || !provider.provider) {
-      alert("Starknet provider is not set up. Please check your network or RPC configuration.");
+    if (!RPC_URL) {
+      alert("RPC URL is not configured. Please set VITE_STARKNET_RPC.");
       return;
     }
-    const providerOrAccount = account ? account : provider.provider;
+
     if (!address) {
       console.error("[ERROR] No address found, aborting balance refresh.");
       return;
     }
+
     try {
-          abi: GRAVITY_VAULT_ABI,
-          address: VAULT_ADDRESS,
-          providerOrAccount
+      // 1) Wallet STRK balance (independent from vault calls)
+      try {
+        const walletResult = await rpcProvider.callContract({
+          contractAddress: STRK_TOKEN_ADDRESS,
+          entrypoint: 'balanceOf',
+          calldata: CallData.compile({ account: address }),
         });
-      // Use new starknet.js v9+ Contract signature (object form)
-        const vault = new Contract({
-          abi: GRAVITY_VAULT_ABI,
-          address: VAULT_ADDRESS,
-          providerOrAccount
+
+        const walletBigInt = parseU256ToBigInt(walletResult);
+        const wallet = (Number(walletBigInt) / 10 ** 18).toFixed(4);
+        setWalletBal(wallet);
+      } catch (walletErr) {
+        console.warn('Failed to fetch wallet STRK balance:', walletErr);
+        setWalletBal('0.00');
+      }
+
+      // 2) Vault delegated balance
+      const vaultResult = await rpcProvider.callContract({
+        contractAddress: VAULT_ADDRESS,
+        entrypoint: 'get_balance',
+        calldata: CallData.compile({ account: address }),
+      });
+
+      const vaultBigInt = parseU256ToBigInt(vaultResult);
+      const addrBal = (Number(vaultBigInt) / 10 ** 18).toFixed(4);
+      setDelegatedBal(addrBal);
+
+      // PUSH TO DB: This is the ONLY way the extension will get the amount
+      try {
+        const syncData: any = {
+          address: address,
+          amount: Number(addrBal),
+          txHash: "manual_refresh" // Indicates this is a balance refresh, not a transaction
+        };
+
+        await fetch('http://localhost:3333/api/delegate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(syncData)
         });
-      const resAddr = await vault.get_balance(address);
-      if (resAddr) {
-        const amountBigInt = uint256.uint256ToBN(resAddr);
-        const addrBal = (Number(amountBigInt) / 10 ** 18).toFixed(4);
-        setDelegatedBal(addrBal);
-        
-        // PUSH TO DB: This is the ONLY way the extension will get the amount
-        try {
-          const syncData: any = {
-            address: address,
-            amount: Number(addrBal),
-            txHash: "manual_refresh" // Indicates this is a balance refresh, not a transaction
-          };
-          
-          // If email is in URL, include it for email-address linking
-          if (userEmail) {
-            syncData.email = userEmail;
-          }
-          
-          await fetch('http://localhost:3333/api/delegate', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(syncData)
-          });
-          
-          // If email was provided, also explicitly link the wallet
-          if (userEmail) {
-            try {
-              await fetch('http://localhost:3333/api/auth/link-wallet-by-email', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  email: userEmail,
-                  starknetAddr: address
-                })
-              });
-            } catch (linkError) {
-              console.warn("Portal: Failed to link wallet to email:", linkError);
-            }
-          }
-        } catch (dbError) {
-          console.warn("Portal: Failed to sync with database (non-critical):", dbError);
-        }
-        
-        if (typeof chrome !== 'undefined' && chrome.storage) {
-          chrome.storage.local.set({ 
-            starknet_address: address,
-            delegated_amount: Number(addrBal)
-          }, () => {
-          });
-        }
-      } else {
+      } catch (dbError) {
+        console.warn("Portal: Failed to sync with database (non-critical):", dbError);
+      }
+
+      if (typeof chrome !== 'undefined' && chrome.storage) {
+        chrome.storage.local.set({ 
+          starknet_address: address,
+          delegated_amount: Number(addrBal)
+        }, () => {
+        });
       }
     } catch (err) {
-      console.error("Contract call failed. Ensure VAULT_ADDRESS is correct:", err);
+      console.error("On-chain balance refresh failed:", err);
+      setDelegatedBal('0.00');
     }
   };
 
@@ -260,6 +275,21 @@ function App() {
       alert("Please enter a valid amount greater than 0.");
       return;
     }
+
+    const numericAmount = Number(amount);
+    const numericWalletBal = Number(walletBal || 0);
+    const numericDelegatedBal = Number(delegatedBal || 0);
+
+    if (type === 'delegate' && numericAmount > numericWalletBal) {
+      alert(`Insufficient wallet STRK balance. You have ${walletBal} STRK, tried to delegate ${numericAmount.toFixed(4)} STRK.`);
+      return;
+    }
+
+    if (type === 'undelegate' && numericAmount > numericDelegatedBal) {
+      alert(`Insufficient vault balance. You have ${delegatedBal} STRK delegated, tried to undelegate ${numericAmount.toFixed(4)} STRK.`);
+      return;
+    }
+
     setLoading(true);
     try {
       const amountInWei = uint256.bnToUint256(BigInt(Math.floor(parseFloat(amount) * 10 ** 18)));
@@ -306,7 +336,8 @@ function App() {
           if (!syncResponse.ok) {
             const errorText = await syncResponse.text();
             console.error('Failed to sync delegation with backend:', errorText);
-            alert('Warning: Transaction succeeded on-chain but backend sync failed. Please refresh.');
+            // Best-effort fallback: force on-chain refresh sync (manual_refresh path)
+            await refreshBalance();
           } else {
             const syncData = await syncResponse.json();
             
@@ -314,14 +345,15 @@ function App() {
             if (typeof chrome !== 'undefined' && chrome.storage) {
               chrome.storage.local.set({ 
                 starknet_address: address,
-                delegated_amount: syncData.delegation.amountDelegated
+                delegated_amount: syncData?.delegation?.amountDelegated ?? Number(delegatedBal)
               }, () => {
               });
             }
           }
         } catch (syncError) {
           console.error('Database sync failed, but transaction succeeded on-chain:', syncError);
-          alert('Warning: Transaction succeeded but backend sync failed. The extension may take longer to update.');
+          // Best-effort fallback: force on-chain refresh sync (manual_refresh path)
+          await refreshBalance();
         }
       }
       
@@ -333,7 +365,12 @@ function App() {
       }, 3000);
     } catch (e) {
       console.error(`${type} error:`, e);
-      alert(`Transaction Failed: ${e}`);
+      const msg = String(e);
+      if (msg.includes('u256_sub Overflow')) {
+        alert('Transaction failed: insufficient on-chain balance for this amount. Reduce amount and try again.');
+      } else {
+        alert(`Transaction Failed: ${e}`);
+      }
     } finally {
       setLoading(false);
     }
@@ -372,9 +409,18 @@ function App() {
               <p className="text-slate-400 text-sm mt-1 font-mono uppercase tracking-tighter">Starknet Delegation Portal</p>
               
               <div className="mt-6 p-4 rounded-2xl bg-slate-950/40 border border-emerald-500/5">
-                <p className="text-[10px] text-emerald-400/50 uppercase font-bold mb-1 tracking-widest">Active Delegation</p>
+                <p className="text-[10px] text-emerald-400/50 uppercase font-bold mb-1 tracking-widest">On-chain Vault Balance</p>
                 <p className="text-3xl font-mono font-bold text-white">
                   {delegatedBal} <span className="text-xs text-slate-500">STRK</span>
+                </p>
+                <p className="text-[10px] text-slate-400 mt-1 font-mono break-all">
+                  address: {address || 'not connected'}
+                </p>
+                <p className="text-[10px] text-slate-400 mt-1 font-mono">
+                  wallet: {walletBal} STRK
+                </p>
+                <p className="text-[10px] text-slate-500 mt-2 font-mono break-all">
+                  vault: {VAULT_ADDRESS}
                 </p>
               </div>
             </div>

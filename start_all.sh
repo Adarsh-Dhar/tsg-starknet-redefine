@@ -13,6 +13,7 @@ echo "Ports cleared!"
 echo "Starting server..."
 cd server
 npx tsc -v
+npm run build
 node dist/index.js &
 SERVER_PID=$!
 cd ..

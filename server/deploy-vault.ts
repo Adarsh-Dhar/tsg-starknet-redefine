@@ -1,4 +1,4 @@
-import { RpcProvider, Contract, ContractFactory, Account } from 'starknet';
+import { RpcProvider} from 'starknet';
 import fs from 'fs';
 import path from 'path';
 

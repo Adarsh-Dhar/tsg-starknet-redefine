@@ -12,7 +12,7 @@ import { PendingDepositsCard } from './PendingDepositsCard';
 // Extract just the ABI from the compiled contract JSON
 const GRAVITY_VAULT_ABI = (GravityVaultAbiJson as any).abi as Abi;
 const STRK_TOKEN_ADDRESS = "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
-const DEFAULT_VAULT_ADDRESS = "0x032490c26a49c74f927669b9d5958aa7db74398d0e55b92a10d952c32e0c2630";
+const DEFAULT_VAULT_ADDRESS = "0x07b39de5a2105f65e9103098a89b0e4c47cae47b2ed4f4012c63d0af61ec416e";
 const VAULT_ADDRESS = (import.meta.env.VITE_VAULT_ADDRESS || DEFAULT_VAULT_ADDRESS).trim();
 const RPC_URL = (import.meta.env.VITE_STARKNET_RPC || "https://starknet-sepolia.public.blastapi.io").trim();
 
@@ -40,7 +40,7 @@ interface DashboardProps {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ brainrotScore, syncAddress, delegatedAmount = 0, hasDelegated, userEmail }) => {
-  const { isConnected, address } = useAccount();
+  const { isConnected, address, account } = useAccount();
   const [displayScore, setDisplayScore] = useState<number>(brainrotScore);
   const [vaultBalance, setVaultBalance] = useState<number>(0); // Current vault balance (what's been deposited)
   const [allowanceRemaining, setAllowanceRemaining] = useState<number>(delegatedAmount); // User's remaining allowance
@@ -55,6 +55,12 @@ const Dashboard: React.FC<DashboardProps> = ({ brainrotScore, syncAddress, deleg
   const lastPersistedAmountRef = useRef<number>(delegatedAmount); // Track remaining allowance
   const previousScoreBucketRef = useRef<number>(Math.floor(brainrotScore / 100));
   const processedBucketsRef = useRef<Set<number>>(new Set()); // Track which buckets we've processed for score transfers
+  const isReconcilingZeroRef = useRef<boolean>(false);
+  const lastZeroReconcileAtRef = useRef<number>(0);
+
+  useEffect(() => {
+    setAllowanceRemaining(delegatedAmount);
+  }, [delegatedAmount]);
 
   // Fetch actual vault balance from smart contract
   useEffect(() => {
@@ -162,11 +168,56 @@ const Dashboard: React.FC<DashboardProps> = ({ brainrotScore, syncAddress, deleg
     }
   }, [brainrotScore, displayScore]);
 
+  const executeRequiredDeposit = async (userAddressToUse: string, requiredDeposit: number): Promise<string | null> => {
+    if (requiredDeposit <= 0) {
+      return null;
+    }
+
+    // Prefer starknet-react account execution (more reliable than window provider APIs).
+    if (account) {
+      const amountInWei = uint256.bnToUint256(BigInt(Math.floor(requiredDeposit * 10 ** 18)));
+      const txResponse = await account.execute([
+        {
+          contractAddress: STRK_TOKEN_ADDRESS,
+          entrypoint: 'approve',
+          calldata: [VAULT_ADDRESS, amountInWei.low, amountInWei.high],
+        },
+        {
+          contractAddress: VAULT_ADDRESS,
+          entrypoint: 'deposit',
+          calldata: [amountInWei.low, amountInWei.high],
+        },
+      ]);
+
+      const txHash = (txResponse as any)?.transaction_hash || '';
+      if (txHash) {
+        await confirmDepositExecution(userAddressToUse, txHash);
+        return txHash;
+      }
+    }
+
+    // Legacy fallback for environments that still expose wallet_invokeFunction.
+    const tx = await executeDepositWithWallet(
+      userAddressToUse,
+      VAULT_ADDRESS,
+      STRK_TOKEN_ADDRESS,
+      requiredDeposit,
+      GRAVITY_VAULT_ABI
+    );
+
+    if (tx?.transactionHash) {
+      await confirmDepositExecution(userAddressToUse, tx.transactionHash);
+      return tx.transactionHash;
+    }
+
+    return null;
+  };
+
   // Tokenomics rule:
   // - every +100 score: deduct 0.01 STRK from vault using slash()
   // - every -100 score: refund 0.01 STRK to user using transfer()
   useEffect(() => {
-    const currentBucket = Math.floor(brainrotScore / 100);
+    const currentBucket = Math.floor(brainrotScore / 500);
     const previousBucket = previousScoreBucketRef.current;
 
     if (currentBucket === previousBucket) {
@@ -174,7 +225,7 @@ const Dashboard: React.FC<DashboardProps> = ({ brainrotScore, syncAddress, deleg
     }
 
     const bucketDelta = currentBucket - previousBucket;
-    const scoreChange = Math.abs(bucketDelta) * 100;
+    const scoreChange = Math.abs(bucketDelta) * 500;
 
     console.log(`[Dashboard] Score bucket change detected: ${previousBucket} → ${currentBucket} (delta: ${bucketDelta}, change: ${scoreChange})`);
 
@@ -217,6 +268,18 @@ const Dashboard: React.FC<DashboardProps> = ({ brainrotScore, syncAddress, deleg
         const data = await response.json();
 
         if (!response.ok || !data.success) {
+          const requiredDeposit = Number(data?.requiredDeposit || 0);
+          const needsWalletDeposit = !isScoreIncrease && data?.error === 'REFUND_REQUIRES_DEPOSIT' && requiredDeposit > 0;
+
+          if (needsWalletDeposit) {
+            const txHash = await executeRequiredDeposit(userAddressToUse, requiredDeposit);
+            if (txHash) {
+              setLastScoreTransferTx(txHash);
+              console.log(`[Dashboard] ✅ Refund fallback deposit successful! TX: ${txHash}`);
+              return;
+            }
+          }
+
           const errorMsg = data.message || data.error || 'Unknown error';
           setScoreTransferError(errorMsg);
           console.error(`[Dashboard] Score transfer failed:`, errorMsg);
@@ -237,6 +300,84 @@ const Dashboard: React.FC<DashboardProps> = ({ brainrotScore, syncAddress, deleg
 
     processScoreTransfer();
   }, [brainrotScore, address, syncAddress]);
+
+  const reconcileToTargetBalance = async (targetBalance: number = 1): Promise<boolean> => {
+    const userAddressToUse = syncAddress || address;
+    if (!userAddressToUse) {
+      return false;
+    }
+
+    if (isReconcilingZeroRef.current) {
+      return false;
+    }
+
+    isReconcilingZeroRef.current = true;
+    setScoreTransferPending(true);
+    setScoreTransferError(null);
+
+    try {
+      const response = await fetch('http://localhost:3333/api/score-transfer/reconcile-zero', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userAddress: userAddressToUse, targetBalance }),
+      });
+
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        const requiredDeposit = Number(data?.requiredDeposit || 0);
+        const needsWalletDeposit = data?.error === 'RECONCILE_NOT_SUPPORTED' && requiredDeposit > 0;
+
+        if (needsWalletDeposit) {
+          const txHash = await executeRequiredDeposit(userAddressToUse, requiredDeposit);
+          if (txHash) {
+            setLastScoreTransferTx(txHash);
+            lastZeroReconcileAtRef.current = Date.now();
+            return true;
+          }
+        }
+
+        const errorMsg = data.message || data.error || 'Failed to reconcile vault balance';
+        setScoreTransferError(errorMsg);
+        return false;
+      }
+
+      if (data.txHash) {
+        setLastScoreTransferTx(data.txHash);
+      }
+
+      lastZeroReconcileAtRef.current = Date.now();
+      return true;
+    } catch (error: any) {
+      const errorMsg = error?.message || 'Network error during reconciliation';
+      setScoreTransferError(errorMsg);
+      return false;
+    } finally {
+      isReconcilingZeroRef.current = false;
+      setScoreTransferPending(false);
+    }
+  };
+
+  // Keep vault balance at 1 STRK baseline whenever score is 0.
+  useEffect(() => {
+    const userAddressToUse = syncAddress || address;
+    if (!userAddressToUse) {
+      return;
+    }
+
+    if (brainrotScore !== 0) {
+      return;
+    }
+
+    // Avoid rapid repeated reconcile calls while chain state updates.
+    const now = Date.now();
+    if (now - lastZeroReconcileAtRef.current < 15000) {
+      return;
+    }
+
+    if (vaultBalance < 0.9999 || vaultBalance > 1.0001) {
+      reconcileToTargetBalance(1);
+    }
+  }, [brainrotScore, vaultBalance, syncAddress, address]);
 
 
 
@@ -282,18 +423,26 @@ const Dashboard: React.FC<DashboardProps> = ({ brainrotScore, syncAddress, deleg
   const status = getStatus(displayScore);
   const percentage = Math.min((displayScore / 10000) * 100, 100);
 
-  const handleResetScore = () => {
-    if (window.confirm('Reset brainrot score to 0?')) {
-      chrome.storage.local.set({ 
-        realtime_stats: { 
-          brainrotScore: 0, 
-          screenTimeMinutes: 0 
-        } 
-      }, () => {
-        // Force UI update
-        window.location.reload();
-      });
+  const handleResetScore = async () => {
+    if (!window.confirm('Reset brainrot score to 0?')) {
+      return;
     }
+
+    chrome.storage.local.set({
+      realtime_stats: {
+        brainrotScore: 0,
+        screenTimeMinutes: 0
+      }
+    }, async () => {
+      // After reset, normalize vault balance to baseline 1.00 STRK.
+      const ok = await reconcileToTargetBalance(1);
+      if (!ok && !window.confirm('Could not reconcile vault balance to 1.00 STRK. Continue anyway?')) {
+        return;
+      }
+
+      // Force UI update
+      window.location.reload();
+    });
   };
 
   // Responsive grid: 1 column for popup, 2 columns for webapp

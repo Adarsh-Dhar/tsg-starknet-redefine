@@ -4,10 +4,14 @@ import { useAccount, useConnect, useDisconnect, useProvider } from "@starknet-re
 import { Wallet, ArrowDownCircle, ArrowUpCircle, Loader2, CheckCircle, X } from 'lucide-react';
 import { uint256, CallData, RpcProvider } from 'starknet';
 
-const DEFAULT_VAULT_ADDRESS = "0x032490c26a49c74f927669b9d5958aa7db74398d0e55b92a10d952c32e0c2630";
+const DEFAULT_VAULT_ADDRESS = "0x07b39de5a2105f65e9103098a89b0e4c47cae47b2ed4f4012c63d0af61ec416e";
 const VAULT_ADDRESS = (import.meta.env.VITE_VAULT_ADDRESS || DEFAULT_VAULT_ADDRESS).trim();
 const RPC_URL = (import.meta.env.VITE_STARKNET_RPC || '').trim();
-const STRK_TOKEN_ADDRESS = "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
+const STRK_TOKEN_ADDRESS = (import.meta.env.VITE_STRK_TOKEN_ADDRESS || "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d").trim();
+const STRK_TOKEN_FALLBACKS = [
+  STRK_TOKEN_ADDRESS,
+  "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd79d119e0e7a16711ee015c3c",
+].filter((addr, i, arr) => addr && arr.indexOf(addr) === i);
 
 const parseU256ToBigInt = (value: any): bigint => {
   if (!value) return 0n;
@@ -187,13 +191,32 @@ function App() {
     try {
       // 1) Wallet STRK balance (independent from vault calls)
       try {
-        const walletResult = await rpcProvider.callContract({
-          contractAddress: STRK_TOKEN_ADDRESS,
-          entrypoint: 'balanceOf',
-          calldata: CallData.compile({ account: address }),
-        });
+        const entrypoints = ['balanceOf', 'balance_of'];
+        let walletBigInt = 0n;
 
-        const walletBigInt = parseU256ToBigInt(walletResult);
+        for (const tokenAddress of STRK_TOKEN_FALLBACKS) {
+          let tokenBalance = 0n;
+
+          for (const entrypoint of entrypoints) {
+            try {
+              const walletResult = await rpcProvider.callContract({
+                contractAddress: tokenAddress,
+                entrypoint,
+                calldata: [address],
+              });
+
+              tokenBalance = parseU256ToBigInt(walletResult);
+              break;
+            } catch {
+              // Try next entrypoint/address combination.
+            }
+          }
+
+          if (tokenBalance > walletBigInt) {
+            walletBigInt = tokenBalance;
+          }
+        }
+
         const wallet = (Number(walletBigInt) / 10 ** 18).toFixed(4);
         setWalletBal(wallet);
       } catch (walletErr) {

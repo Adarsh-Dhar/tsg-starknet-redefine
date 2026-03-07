@@ -19,9 +19,9 @@ fi
 cd "$(dirname "$0")/../grass_vault"
 
 echo "📝 Building contract..."
-scarb build --release
+scarb build
 
-if [ ! -f "target/release/grass_vault_GravityVault.contract_class.json" ]; then
+if [ ! -f "target/dev/grass_vault_GravityVault.contract_class.json" ]; then
     echo "❌ Contract build failed"
     exit 1
 fi
@@ -31,13 +31,15 @@ echo ""
 
 # Get class hash
 echo "📋 Calculating class hash..."
-CLASS_HASH=$(sncast class-hash target/release/grass_vault_GravityVault.contract_class.json)
+cd /Users/adarsh/Documents/touch-some-grass/grass_vault
+CLASS_HASH=$(sncast utils class-hash --contract-name GravityVault 2>&1 | grep "^0x" | head -1)
+cd /Users/adarsh/Documents/touch-some-grass
 echo "✅ Class Hash: $CLASS_HASH"
 echo ""
 
 # Deploy parameters
 DELEGATE_ADDR="0x4a05d15f240be02f13ef2e09349a668f2faa7942cbde11008b737111c9351f3"
-STRK_TOKEN="0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd79d119e0e7a16711ee015c3c"
+STRK_TOKEN="0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d"
 
 echo "🔐 Deployment Parameters:"
 echo "   Class Hash:   $CLASS_HASH"
@@ -49,19 +51,20 @@ echo "⏳ Deploying contract..."
 echo ""
 
 # Deploy using sncast
-DEPLOY_OUTPUT=$(sncast deploy $CLASS_HASH \
-    $DELEGATE_ADDR \
-    $STRK_TOKEN \
+DEPLOY_OUTPUT=$(sncast deploy \
+    --contract-name GravityVault \
+    --constructor-calldata $DELEGATE_ADDR $STRK_TOKEN \
     --account mainuser \
-    --accounts-file ../account-file \
-    --rpc https://starknet-sepolia.public.blastapi.io)
+    --accounts-file account-file \
+    --rpc https://starknet-sepolia.public.blastapi.io 2>&1)
 
-# Extract contract address
-CONTRACT_ADDRESS=$(echo "$DEPLOY_OUTPUT" | grep -oP '0x[0-9a-f]{63}' | head -1)
+echo "$DEPLOY_OUTPUT"
+
+# Extract contract address - look for patterns like "deployed at 0x..."
+CONTRACT_ADDRESS=$(echo "$DEPLOY_OUTPUT" | grep -oP '0x[0-9a-f]{63}' | tail -1)
 
 if [ -z "$CONTRACT_ADDRESS" ]; then
     echo "❌ Deployment failed"
-    echo "$DEPLOY_OUTPUT"
     exit 1
 fi
 

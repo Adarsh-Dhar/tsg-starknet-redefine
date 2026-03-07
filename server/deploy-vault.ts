@@ -24,7 +24,7 @@ async function deployVault() {
     // Constructor parameters
     // delegate_addr: server's Starknet address (will need to set this)
     // token: STRK token address on Sepolia
-    const STRK_TOKEN = '0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd79d119e0e7a16711ee015c3c';
+    const STRK_TOKEN = '0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d';
     const SERVER_ADDRESS = process.env.STARKNET_ADDRESS || '0x06d9399f6731ffcf7187c86824b8326d2adc6a78fb4f424b12772317244112b2';
     
     console.log('\n📝 Deployment Parameters:');

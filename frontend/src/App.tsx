@@ -7,6 +7,7 @@ import {
   BarChart3, 
   Trophy 
 } from 'lucide-react';
+import { Contract, RpcProvider, type Abi } from 'starknet';
 
 // Page Imports
 import LoginPage from './LoginPage';
@@ -16,6 +17,12 @@ import InsightsPage from './InsightsPage';
 import LeaderboardPage from './LeaderboardPage';
 import Dashboard from './components/Dashboard';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import GravityVaultAbiJson from './abi/GravityVault.json';
+
+const GRAVITY_VAULT_ABI = (GravityVaultAbiJson as any).abi as Abi;
+const DEFAULT_VAULT_ADDRESS = '0x07b39de5a2105f65e9103098a89b0e4c47cae47b2ed4f4012c63d0af61ec416e';
+const VAULT_ADDRESS = (import.meta.env.VITE_VAULT_ADDRESS || DEFAULT_VAULT_ADDRESS).trim();
+const RPC_URL = (import.meta.env.VITE_STARKNET_RPC || 'https://starknet-sepolia.public.blastapi.io').trim();
 
 // Interface for server data structure
 interface RealtimeStats {
@@ -63,6 +70,49 @@ function AppContent() {
       // This space is intentionally left blank after removing console.logs
     }
   }, [user, syncAddress, delegatedAmount, hasDelegated]);
+
+  // On-chain vault balance is the source of truth for gating access.
+  // This prevents false "Delegation Required" when DB/cache is stale.
+  useEffect(() => {
+    const addressToCheck = syncAddress || user?.starknetAddr;
+    if (!addressToCheck) return;
+
+    let cancelled = false;
+
+    const refreshOnChainDelegation = async () => {
+      try {
+        const provider = new RpcProvider({ nodeUrl: RPC_URL });
+        const vault = new Contract({ abi: GRAVITY_VAULT_ABI, address: VAULT_ADDRESS, providerOrAccount: provider });
+        const result = await (vault as any).get_balance(addressToCheck);
+
+        let wei = 0n;
+        if (typeof result === 'bigint') {
+          wei = result;
+        } else if (result?.low !== undefined && result?.high !== undefined) {
+          wei = BigInt(result.low ?? '0') + (BigInt(result.high ?? '0') << 128n);
+        } else if (Array.isArray(result)) {
+          wei = BigInt(result[0] ?? '0') + (BigInt(result[1] ?? '0') << 128n);
+        }
+
+        const onChainAmount = Number(wei) / 10 ** 18;
+        if (cancelled) return;
+
+        // Use highest confidence value so stale DB cannot lock the user out.
+        setDelegatedAmount((prev) => Math.max(prev, onChainAmount));
+        setHasDelegated(onChainAmount >= 1);
+      } catch {
+        // Keep existing values on RPC failure.
+      }
+    };
+
+    refreshOnChainDelegation();
+    const interval = setInterval(refreshOnChainDelegation, 15000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [syncAddress, user?.starknetAddr]);
 
   // Listen for chrome.storage changes from background script (activity tracking updates)
   useEffect(() => {

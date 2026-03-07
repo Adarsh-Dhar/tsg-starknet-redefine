@@ -10,7 +10,7 @@ const CONTRACT_PATH = path.join(__dirname, '../../grass_vault/target/release/gra
 const ACCOUNT_FILE = path.join(__dirname, '../../account-file');
 
 // STRK token on Sepolia
-const STRK_TOKEN = '0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd79d119e0e7a16711ee015c3c';
+const STRK_TOKEN = '0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d';
 
 async function deployVault() {
   try {

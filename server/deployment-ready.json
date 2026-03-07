@@ -4,7 +4,7 @@
   "account": "0x4a05d15f240be02f13ef2e09349a668f2faa7942cbde11008b737111c9351f3",
   "constructorArgs": {
     "delegate_addr": "0x4a05d15f240be02f13ef2e09349a668f2faa7942cbde11008b737111c9351f3",
-    "token": "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd79d119e0e7a16711ee015c3c"
+    "token": "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d"
   },
   "instructions": "Use starkli CLI to deploy this contract class"
 }

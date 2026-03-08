@@ -34,6 +34,33 @@ console.warn("🔴 [TSG] Content script file is loading on:", window.location.hr
   let reportCount = 0;
   let reportTimer = null;
 
+  const extractVideoMetadata = () => {
+    const title =
+      document.querySelector('h1.ytd-watch-metadata yt-formatted-string')?.innerText?.trim() ||
+      document.querySelector('h1.ytd-video-primary-info-renderer')?.innerText?.trim() ||
+      document.querySelector('h2.title')?.innerText?.trim() ||
+      '';
+
+    const description =
+      document.querySelector('ytd-text-inline-expander#description-inline-expander')?.innerText?.trim() ||
+      document.querySelector('meta[name="description"]')?.getAttribute('content') ||
+      '';
+
+    const keywords =
+      (document.querySelector('meta[name="keywords"]')?.getAttribute('content') || '')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+
+    return {
+      title,
+      description,
+      tags: keywords,
+      url: window.location.href,
+      isShorts: window.location.href.includes('/shorts/'),
+    };
+  };
+
   // 2. Send activity message via sendMessage
   const reportActivity = () => {
     console.warn("🟢 [TSG] reportActivity CALLED!");
@@ -42,18 +69,21 @@ console.warn("🔴 [TSG] Content script file is loading on:", window.location.hr
       const delta = Math.floor((Date.now() - startTime) / 1000);
       console.warn("🟢 [TSG] Delta calculated:", delta);
       const isShorts = window.location.href.includes('/shorts/');
+      const isWatch = window.location.href.includes('/watch');
+      const isVideoPage = isShorts || isWatch;
       console.warn("🟢 [TSG] isShorts checked:", isShorts);
       const url = window.location.href;
       console.warn("🟢 [TSG] URL grabbed:", url);
+      const metadata = extractVideoMetadata();
       
       reportCount++;
       console.warn("🟢 [TSG] reportCount incremented to:", reportCount);
 
       // Log every check with proper template literal
-      console.log(`[TSG] Check #${reportCount}: delta=${delta}s, isShorts=${isShorts}, url_contains_shorts=${window.location.href.includes('/shorts/')}`);
-      console.warn(`🟡 [TSG] About to check condition: isShorts=${isShorts}, delta=${delta}, threshold=5`);
+      console.log(`[TSG] Check #${reportCount}: delta=${delta}s, isShorts=${isShorts}, isWatch=${isWatch}`);
+      console.warn(`🟡 [TSG] About to check condition: isVideoPage=${isVideoPage}, delta=${delta}, threshold=5`);
 
-      if (isShorts && delta >= 5) {
+      if (isVideoPage && delta >= 5) {
         // Only attempt if context is valid
         if (!isContextValid()) {
           console.error("❌ [TSG] Extension context invalid. Cannot report activity.");
@@ -76,7 +106,7 @@ console.warn("🔴 [TSG] Content script file is loading on:", window.location.hr
 
           // Use sendMessage
           chrome.runtime.sendMessage(
-            { type: "YOUTUBE_ACTIVITY", duration: delta },
+            { type: "YOUTUBE_ACTIVITY", duration: delta, metadata },
             (response) => {
               console.warn("🟣 [TSG] sendMessage callback executed");
               try {
@@ -106,7 +136,7 @@ console.warn("🔴 [TSG] Content script file is loading on:", window.location.hr
           return;
         }
       } else {
-        console.warn(`🟡 [TSG] Condition not met: isShorts=${isShorts}, delta=${delta}, needs delta >= 5`);
+        console.warn(`🟡 [TSG] Condition not met: isVideoPage=${isVideoPage}, delta=${delta}, needs delta >= 5`);
       }
     } catch (mainError) {
       console.error("❌ [TSG] Critical error in reportActivity:", mainError.message);

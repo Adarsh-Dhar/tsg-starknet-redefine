@@ -47,6 +47,9 @@ importers:
       multer:
         specifier: ^2.0.2
         version: 2.0.2
+      openai:
+        specifier: ^5.23.2
+        version: 5.23.2(ws@8.17.1)(zod@4.3.6)
       starknet:
         specifier: ^9.2.1
         version: 9.2.1(typescript@5.9.3)(zod@4.3.6)
@@ -825,6 +828,18 @@ packages:
 
   once@1.4.0:
     resolution: {integrity: sha512-lNaJgI+2Q5URQBkccEKHTQOPaXdUxnZZElQTZY0MFUAuaEqe1E+Nyvgdz/aIyNi6Z9MzO5dv1H8n58/GELp3+w==}
+
+  openai@5.23.2:
+    resolution: {integrity: sha512-MQBzmTulj+MM5O8SKEk/gL8a7s5mktS9zUtAkU257WjvobGc9nKcBuVwjyEEcb9SI8a8Y2G/mzn3vm9n1Jlleg==}
+    hasBin: true
+    peerDependencies:
+      ws: ^8.18.0
+      zod: ^3.23.8
+    peerDependenciesMeta:
+      ws:
+        optional: true
+      zod:
+        optional: true
 
   ox@0.4.4:
     resolution: {integrity: sha512-oJPEeCDs9iNiPs6J0rTx+Y0KGeCGyCAA3zo94yZhm8G5WpOxrwUtn2Ie/Y8IyARSqqY/j9JTKA3Fc1xs1DvFnw==}
@@ -1794,6 +1809,11 @@ snapshots:
   once@1.4.0:
     dependencies:
       wrappy: 1.0.2
+
+  openai@5.23.2(ws@8.17.1)(zod@4.3.6):
+    optionalDependencies:
+      ws: 8.17.1
+      zod: 4.3.6
 
   ox@0.4.4(typescript@5.9.3)(zod@4.3.6):
     dependencies:

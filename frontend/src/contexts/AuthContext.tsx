@@ -8,7 +8,36 @@ import {
   getUserEmail
 } from '../lib/tokenStorage';
 
-const API_BASE_URL = 'http://localhost:3333/api';
+const ENV_API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').trim().replace(/\/$/, '');
+const API_BASE_URL_CANDIDATES = Array.from(
+  new Set(
+    [
+      ENV_API_BASE_URL,
+      'http://localhost:3333/api',
+      'http://127.0.0.1:3333/api',
+      'http://localhost:3000/api',
+    ].filter(Boolean)
+  )
+);
+
+let activeApiBaseUrl = API_BASE_URL_CANDIDATES[0] || 'http://localhost:3333/api';
+
+async function authFetch(path: string, init?: RequestInit): Promise<Response> {
+  const ordered = [activeApiBaseUrl, ...API_BASE_URL_CANDIDATES.filter((u) => u !== activeApiBaseUrl)];
+  let lastError: unknown;
+
+  for (const base of ordered) {
+    try {
+      const response = await fetch(`${base}${path}`, init);
+      activeApiBaseUrl = base;
+      return response;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error('Failed to reach auth server');
+}
 
 export interface Delegation {
   id: string;
@@ -56,7 +85,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Fetch user info helper
   const fetchUserInfoFn = useCallback(async (authToken: string): Promise<AuthUser | null> => {
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/me`, {
+      const response = await authFetch(`/auth/me`, {
         headers: {
           'Authorization': `Bearer ${authToken}`
         }
@@ -82,7 +111,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return false;
       }
 
-      const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+      const response = await authFetch(`/auth/refresh`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -145,7 +174,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(async (email: string, password: string) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/login`, {
+      const response = await authFetch(`/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -180,7 +209,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signup = useCallback(async (email: string, password: string) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/signup`, {
+      const response = await authFetch(`/auth/signup`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

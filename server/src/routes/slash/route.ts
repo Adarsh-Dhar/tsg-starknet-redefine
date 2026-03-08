@@ -6,7 +6,11 @@ const router = Router();
 
 router.post("/", async (req, res) => {
     // Accepting penalty amount from the ingestion trigger
-    const { userAddress, amount = 0.01 } = req.body;
+    const { userAddress, amount = 0.01, reason = 'slash' } = req.body;
+
+    if (!userAddress) {
+      return res.status(400).json({ error: 'userAddress required' });
+    }
 
     try {
         // Convert STRK amount to Uint256 for Starknet (assuming 18 decimals)
@@ -29,7 +33,8 @@ router.post("/", async (req, res) => {
         res.json({ 
             success: true, 
             txHash: executeResponse.transaction_hash,
-            deducted: amount
+            deducted: amount,
+            reason
         });
     } catch (error) {
         console.error("Penalty Execution Error:", error);

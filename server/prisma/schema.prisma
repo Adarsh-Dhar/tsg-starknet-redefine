@@ -39,3 +39,54 @@ model TransactionHistory {
   status          String   // "pending", "success", "failed", "reverted"
   timestamp       DateTime @default(now())
 }
+
+model ActivityEvent {
+  id              String   @id @default(cuid())
+  address         String
+  videoUrl        String?
+  videoTitle      String?
+  videoDesc       String?
+  isShorts        Boolean  @default(false)
+  durationSeconds Int
+  timestamp       DateTime @default(now())
+  scoringId       String?  @unique
+  scoring         ScoringDecision? @relation(fields: [scoringId], references: [id])
+}
+
+model Session {
+  id              String   @id @default(cuid())
+  address         String
+  startTime       DateTime
+  endTime         DateTime?
+  totalDuration   Int      @default(0)
+  eventCount      Int      @default(0)
+  sessionType     String   // "healthy", "risky", "mixed"
+  avgRotScore     Float    @default(0)
+  avgRotVelocity  Float    @default(0)
+}
+
+model ScoreLedger {
+  id              String   @id @default(cuid())
+  address         String
+  scoreBefore     Float
+  scoreDelta      Float
+  scoreAfter      Float
+  reason          String   // "activity", "recovery", "slash", "manual"
+  timestamp       DateTime @default(now())
+  eventId         String?
+}
+
+model ScoringDecision {
+  id              String   @id @default(cuid())
+  address         String
+  rotScore        Float
+  rotVelocity     Float
+  heuristicScore  Float
+  agentScore      Float
+  aiWeight        Float
+  baseline        Float
+  reasoning       String
+  source          String   // "agent", "fallback"
+  timestamp       DateTime @default(now())
+  event           ActivityEvent?
+}

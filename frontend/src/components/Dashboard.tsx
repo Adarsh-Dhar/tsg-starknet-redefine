@@ -15,6 +15,7 @@ const STRK_TOKEN_ADDRESS = "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab0720
 const DEFAULT_VAULT_ADDRESS = "0x07b39de5a2105f65e9103098a89b0e4c47cae47b2ed4f4012c63d0af61ec416e";
 const VAULT_ADDRESS = (import.meta.env.VITE_VAULT_ADDRESS || DEFAULT_VAULT_ADDRESS).trim();
 const RPC_URL = (import.meta.env.VITE_STARKNET_RPC || "https://starknet-sepolia.public.blastapi.io").trim();
+const ENABLE_CLIENT_SCORE_TRANSFERS = false;
 
 interface Transaction {
   txHash: string;
@@ -54,7 +55,7 @@ const Dashboard: React.FC<DashboardProps> = ({ brainrotScore, syncAddress, deleg
   const initialDelegatedAmountRef = useRef<number>(delegatedAmount);
   const lastPersistedAmountRef = useRef<number>(delegatedAmount); // Track remaining allowance
   const previousScoreBucketRef = useRef<number>(Math.floor(brainrotScore / 100));
-  const processedBucketsRef = useRef<Set<number>>(new Set()); // Track which buckets we've processed for score transfers
+  const isScoreTransferInFlightRef = useRef<boolean>(false);
   const isReconcilingZeroRef = useRef<boolean>(false);
   const lastZeroReconcileAtRef = useRef<number>(0);
 
@@ -217,7 +218,11 @@ const Dashboard: React.FC<DashboardProps> = ({ brainrotScore, syncAddress, deleg
   // - every +100 score: deduct 0.01 STRK from vault using slash()
   // - every -100 score: refund 0.01 STRK to user using transfer()
   useEffect(() => {
-    const currentBucket = Math.floor(brainrotScore / 500);
+    if (!ENABLE_CLIENT_SCORE_TRANSFERS) {
+      return;
+    }
+
+    const currentBucket = Math.floor(brainrotScore / 100);
     const previousBucket = previousScoreBucketRef.current;
 
     if (currentBucket === previousBucket) {
@@ -248,6 +253,10 @@ const Dashboard: React.FC<DashboardProps> = ({ brainrotScore, syncAddress, deleg
     console.log(`[Dashboard] isScoreIncrease: ${isScoreIncrease}, isScoreDecrease: ${isScoreDecrease}, bucketDelta: ${bucketDelta}`);
 
     const processScoreTransfer = async () => {
+      if (isScoreTransferInFlightRef.current) {
+        return;
+      }
+      isScoreTransferInFlightRef.current = true;
       setScoreTransferPending(true);
       setScoreTransferError(null);
 
@@ -294,6 +303,7 @@ const Dashboard: React.FC<DashboardProps> = ({ brainrotScore, syncAddress, deleg
         setScoreTransferError(errorMsg);
         console.error('[Dashboard] Score transfer error:', error);
       } finally {
+        isScoreTransferInFlightRef.current = false;
         setScoreTransferPending(false);
       }
     };

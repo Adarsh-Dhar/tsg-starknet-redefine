@@ -47,7 +47,7 @@ chrome.runtime.onConnect.addListener((port) => {
                 const response = await fetch('http://localhost:3333/api/data/activity', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ durationSeconds: msg.duration, address: res.starknet_address })
+                  body: JSON.stringify({ durationSeconds: msg.duration, address: res.starknet_address, metadata: msg.metadata || {} })
                 });
                 if (!response.ok) throw new Error("Server Error");
                 const data = await response.json();
@@ -124,7 +124,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
                   const response = await fetch('http://localhost:3333/api/data/activity', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ durationSeconds: msg.duration, address: res.starknet_address })
+                    body: JSON.stringify({ durationSeconds: msg.duration, address: res.starknet_address, metadata: msg.metadata || {} })
                   });
                   if (!response.ok) {
                     const errText = await response.text();
@@ -234,6 +234,9 @@ chrome.sidePanel
 
 // --- YOUTUBE SHORTS ACTIVITY RELAY ---
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  // Disabled: duplicate relay path (primary handler above already processes YOUTUBE_ACTIVITY).
+  return;
+
   if (message.type === "YOUTUBE_ACTIVITY") {
     chrome.storage.local.get(['realtime_stats', 'starknet_address'], async (res) => {
       let stats = res.realtime_stats || { brainrotScore: 0, screenTimeMinutes: 0 };
@@ -257,7 +260,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           const response = await fetch('http://localhost:3333/api/data/activity', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ durationSeconds: message.duration, address: res.starknet_address })
+            body: JSON.stringify({ durationSeconds: message.duration, address: res.starknet_address, metadata: message.metadata || {} })
           });
           if (!response.ok) throw new Error("Server Error");
           const data = await response.json();
@@ -280,11 +283,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 const MAX_SCORE = 10000;
 const SCORE_INC = 500; // Increase per check while watching
 const SCORE_DEC = 200; // Decrease per check while away
+const ENABLE_LEGACY_LOCAL_TICK = false;
 
 // Alarm to check activity every 1 minute
-chrome.alarms.create("brainrotTick", { periodInMinutes: 1 });
+if (ENABLE_LEGACY_LOCAL_TICK) {
+  chrome.alarms.create("brainrotTick", { periodInMinutes: 1 });
+}
 
 chrome.alarms.onAlarm.addListener(async (alarm) => {
+  if (!ENABLE_LEGACY_LOCAL_TICK) return;
   if (alarm.name === "brainrotTick") {
     const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
     const isShorts = tabs[0]?.url?.includes("youtube.com/shorts/");

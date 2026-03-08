@@ -3,6 +3,7 @@ import prisma from '../../lib/prisma.js';
 import { z } from 'zod';
 
 const router = Router();
+const HISTORY_DEBUG_LOGS = process.env.HISTORY_DEBUG_LOGS === 'true';
 
 const HistoryRequestSchema = z.object({
   address: z.string().min(1, 'Address is required'),
@@ -30,7 +31,9 @@ router.get('/history/:address', async (req: Request<{ address: string }>, res: R
 
     const { address, limit } = parsed.data;
 
-    console.log(`[History] Fetching transaction history for ${address}, limit: ${limit}`);
+    if (HISTORY_DEBUG_LOGS) {
+      console.log(`[History] Fetching transaction history for ${address}, limit: ${limit}`);
+    }
 
     // Get delegation record (which stores the latest state)
     const delegation = await prisma.delegation.findUnique({
@@ -43,10 +46,14 @@ router.get('/history/:address', async (req: Request<{ address: string }>, res: R
       // Use literal SQL string (properly escaped address)
       const escapedAddress = address.replace(/'/g, "''");
       const query = `SELECT id, txHash, address, amount, type, status, timestamp FROM "TransactionHistory" WHERE address = '${escapedAddress}' ORDER BY timestamp DESC LIMIT ${limit}`;
-      console.log(`[History] Running SQL: ${query}`);
+      if (HISTORY_DEBUG_LOGS) {
+        console.log(`[History] Running SQL: ${query}`);
+      }
       transactions = await (prisma as any).$queryRawUnsafe(query);
-      console.log(`[History] Query returned ${transactions.length} rows`);
-      console.log(`[History] Data: ${JSON.stringify(transactions)}`);
+      if (HISTORY_DEBUG_LOGS) {
+        console.log(`[History] Query returned ${transactions.length} rows`);
+        console.log(`[History] Data: ${JSON.stringify(transactions)}`);
+      }
     } catch (queryError) {
       console.error(`[History] Query failed:`, queryError);
       transactions = [];

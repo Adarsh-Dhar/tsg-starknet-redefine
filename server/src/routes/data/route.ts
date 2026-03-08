@@ -13,6 +13,8 @@ const { streamArray } = streamArrayPkg;
 // Internal imports leveraging local project architecture
 import { verifySignature } from '../../lib/verifySignature.js'; 
 import { slashQueue } from '../../lib/queues.js'; 
+import { analyzeVideoContent, type VideoMetadata } from './analyze.js';
+import prisma from '../../lib/prisma.js';
 
 const router = Router();
 const upload = multer({ dest: 'uploads/' });
@@ -59,30 +61,216 @@ interface UserSession {
 
 // In-memory session store (for dev only, not persistent!)
 
-// --- YOUTUBE SHORTS ACTIVITY TRACKING ---
-let globalUserStats = {
-  screenTimeMinutes: 0,
-  brainrotScore: 0,
-};
+// --- AGENT-CONTROLLED ACTIVITY TRACKING ---
+interface UserStats {
+  screenTimeMinutes: number;
+  brainrotScore: number;
+  lastRotScore: number;
+  lastRotVelocity: number;
+  healthySessions: number;
+  riskySessions: number;
+  lastReasoning: string;
+  shouldSlash: boolean;
+  lastTransferBucket: number;
+}
+
+const userStatsStore: Record<string, UserStats> = {};
+const transferInFlight: Record<string, boolean> = {};
+
+const ActivitySchema = z.object({
+  durationSeconds: z.number().positive().max(3600),
+  address: z.string().min(3),
+  metadata: z
+    .object({
+      title: z.string().optional(),
+      description: z.string().optional(),
+      tags: z.array(z.string()).optional(),
+      url: z.string().optional(),
+      isShorts: z.boolean().optional(),
+    })
+    .optional(),
+});
+
+function getUserStats(address: string): UserStats {
+  if (!userStatsStore[address]) {
+    userStatsStore[address] = {
+      screenTimeMinutes: 0,
+      brainrotScore: 0,
+      lastRotScore: 0,
+      lastRotVelocity: 0,
+      healthySessions: 0,
+      riskySessions: 0,
+      lastReasoning: '',
+      shouldSlash: false,
+      lastTransferBucket: 0,
+    };
+  }
+
+  return userStatsStore[address];
+}
+
+router.post('/analyze', async (req: Request, res: Response) => {
+  const parsed = ActivitySchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: 'Invalid payload', details: parsed.error.issues });
+  }
+
+  const { durationSeconds, address, metadata } = parsed.data;
+  const safeMetadata: VideoMetadata = {
+    title: metadata?.title || '',
+    description: metadata?.description || '',
+    tags: metadata?.tags || [],
+    url: metadata?.url || '',
+    isShorts: metadata?.isShorts || false,
+  };
+
+  const analysis = await analyzeVideoContent(address, safeMetadata, durationSeconds);
+
+  return res.status(200).json({
+    success: true,
+    analysis,
+  });
+});
 
 router.post('/activity', async (req: Request, res: Response) => {
-  const { durationSeconds, address } = req.body;
-  if (typeof durationSeconds !== 'number' || !address) {
-    return res.status(400).json({ error: 'Missing durationSeconds or address' });
+  const parsed = ActivitySchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: 'Invalid payload', details: parsed.error.issues });
   }
-  // Update stats
+
+  const { durationSeconds, address, metadata } = parsed.data;
+  const userStats = getUserStats(address);
   const minutes = durationSeconds / 60;
-  globalUserStats.screenTimeMinutes += minutes;
-    // FIX: Higher multiplier for testing (e.g., 100 instead of 10)
-    globalUserStats.brainrotScore += minutes * 100;
-  res.status(200).json({
+
+  const safeMetadata: VideoMetadata = {
+    title: metadata?.title || '',
+    description: metadata?.description || '',
+    tags: metadata?.tags || [],
+    url: metadata?.url || '',
+    isShorts: metadata?.isShorts || false,
+  };
+
+  console.info('[ActivityRoute] ACTIVITY_RECEIVED', {
+    address,
+    durationSeconds,
+    title: safeMetadata.title,
+    isShorts: safeMetadata.isShorts,
+  });
+
+  const analysis = await analyzeVideoContent(address, safeMetadata, durationSeconds);
+
+  console.info('[ActivityRoute] AGENT_DECISION', {
+    address,
+    rot_score: analysis.rot_score,
+    rot_velocity: analysis.rot_velocity,
+    source: analysis.source,
+    reasoning: analysis.reasoning,
+  });
+
+  // Agent-controlled scoring: higher rot velocity for higher risk content.
+  const grossIncrease = minutes * 100 * Math.max(0.05, analysis.rot_velocity);
+
+  // Recovery mechanism: healthy content decays accumulated brainrot.
+  const isHealthySession = analysis.rot_score < 0.35 && analysis.rot_velocity < 0.45;
+  const recovery = isHealthySession ? minutes * 35 : 0;
+
+  userStats.screenTimeMinutes += minutes;
+  userStats.brainrotScore = Math.max(0, userStats.brainrotScore + grossIncrease - recovery);
+  userStats.lastRotScore = analysis.rot_score;
+  userStats.lastRotVelocity = analysis.rot_velocity;
+  userStats.lastReasoning = analysis.reasoning;
+
+  if (isHealthySession) {
+    userStats.healthySessions += 1;
+  } else {
+    userStats.riskySessions += 1;
+  }
+
+  userStats.shouldSlash = analysis.rot_score >= 0.8;
+
+  // Server-driven score transfer (single source of truth).
+  // Every +100 score bucket triggers one deduct request.
+  const currentBucket = Math.floor(userStats.brainrotScore / 100);
+  if (currentBucket > userStats.lastTransferBucket && !transferInFlight[address]) {
+    const bucketDelta = currentBucket - userStats.lastTransferBucket;
+    transferInFlight[address] = true;
+    try {
+      const response = await fetch('http://localhost:3333/api/score-transfer/deduct', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userAddress: address,
+          scoreIncrease: bucketDelta * 100,
+        }),
+      });
+
+      if (response.ok) {
+        userStats.lastTransferBucket = currentBucket;
+      }
+    } catch (transferError) {
+      console.error('[ActivityRoute] Auto deduct failed:', transferError);
+    } finally {
+      transferInFlight[address] = false;
+    }
+  }
+
+  // Persist audit records
+  try {
+    const scoringDecision = await (prisma as any).scoringDecision.create({
+      data: {
+        address,
+        rotScore: analysis.rot_score,
+        rotVelocity: analysis.rot_velocity,
+        heuristicScore: 0,
+        agentScore: analysis.rot_score,
+        aiWeight: 0.75,
+        baseline: 0.5,
+        reasoning: analysis.reasoning,
+        source: analysis.source,
+      },
+    });
+
+    await (prisma as any).activityEvent.create({
+      data: {
+        address,
+        videoUrl: safeMetadata.url,
+        videoTitle: safeMetadata.title?.substring(0, 255),
+        videoDesc: safeMetadata.description?.substring(0, 1000),
+        isShorts: safeMetadata.isShorts,
+        durationSeconds,
+        scoringId: scoringDecision.id,
+      },
+    });
+
+    await (prisma as any).scoreLedger.create({
+      data: {
+        address,
+        scoreBefore: userStats.brainrotScore - grossIncrease + recovery,
+        scoreDelta: grossIncrease - recovery,
+        scoreAfter: userStats.brainrotScore,
+        reason: isHealthySession ? 'recovery' : 'activity',
+      },
+    });
+  } catch (dbError) {
+    console.error('[ActivityRoute] Failed to persist audit records:', dbError);
+  }
+
+  return res.status(200).json({
     success: true,
-    stats: globalUserStats
+    stats: userStats,
+    analysis: {
+      rot_score: analysis.rot_score,
+      rot_velocity: analysis.rot_velocity,
+      reasoning: analysis.reasoning,
+      source: analysis.source,
+      isHealthySession,
+    },
   });
 });
 
 router.get('/stats', (req: Request, res: Response) => {
-  res.status(200).json(globalUserStats);
+  const address = String(req.query.address || 'global');
+  res.status(200).json(getUserStats(address));
 });
 const _sessionStore: Record<string, UserSession> = {};
 const _baselineStore: Record<string, string> = {};
@@ -175,9 +363,10 @@ router.post('/ingest/realtime', dataRateLimiter, async (req: Request, res: Respo
     session.score += scoreDelta;
     session.lastUpdate = now;
 
-    // FIX: Sync globalUserStats with session
-    globalUserStats.brainrotScore = session.score;
-    globalUserStats.screenTimeMinutes += (duration / 60);
+    // Sync legacy ingest score into unified user stats
+    const unifiedStats = getUserStats(walletAddress);
+    unifiedStats.brainrotScore = session.score;
+    unifiedStats.screenTimeMinutes += (duration / 60);
 
     // Milestone tracker for 100-point blocks
     const _milestoneStore: Record<string, number> = global._milestoneStore || (global._milestoneStore = {});
